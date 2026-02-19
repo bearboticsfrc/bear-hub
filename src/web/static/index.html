@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BearHub — Team 4068</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <header>
+        <img src="/static/4068Gear.jpeg" alt="Team 4068" class="team-logo">
+        <div class="header-title">
+            <h1>BearHub</h1>
+            <span id="hub-name-badge" class="hub-badge">RedHub</span>
+        </div>
+        <div class="header-status">
+            <span id="mode-badge" class="mode-badge mode-adhoc">adhoc</span>
+            <span class="status-item">
+                <span class="status-dot" id="fms-dot"></span>
+                <span class="status-label">FMS</span>
+            </span>
+            <span class="status-item">
+                <span class="status-dot" id="nt-dot"></span>
+                <span class="status-label">NT</span>
+            </span>
+        </div>
+        <nav>
+            <a href="/" class="nav-btn active">Dashboard</a>
+            <a href="/admin" class="nav-btn">Admin</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="active-display">
+            <div class="active-label">ACTIVE BALL COUNT</div>
+            <div class="active-count" id="active-count">0</div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="score-chart"></canvas>
+        </div>
+
+        <div class="sub-cards">
+            <div class="sub-card">
+                <div class="sub-label">AUTO COUNT</div>
+                <div class="sub-count" id="auto-count">0</div>
+            </div>
+            <div class="sub-card">
+                <div class="sub-label">INACTIVE COUNT</div>
+                <div class="sub-count" id="inactive-count">0</div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button id="simulate-btn" class="action-btn simulate" style="display:none;">+ Ball</button>
+        </div>
+
+        <div class="actions" id="reset-section" style="display:none;margin-top:0.75rem;">
+            <button id="reset-btn" class="action-btn danger">Reset Count</button>
+        </div>
+    </main>
+
+    <canvas id="confetti-canvas"></canvas>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

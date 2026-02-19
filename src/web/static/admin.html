@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BearHub Admin — Team 4068</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <header>
+        <img src="/static/4068Gear.jpeg" alt="Team 4068" class="team-logo">
+        <div class="header-title">
+            <h1>BearHub</h1>
+            <span id="hub-name-badge" class="hub-badge">RedHub</span>
+        </div>
+        <div class="header-status">
+            <span id="mode-badge" class="mode-badge mode-adhoc">adhoc</span>
+            <span class="status-item">
+                <span class="status-dot" id="fms-dot"></span>
+                <span class="status-label">FMS</span>
+            </span>
+            <span class="status-item">
+                <span class="status-dot" id="nt-dot"></span>
+                <span class="status-label">NT</span>
+            </span>
+        </div>
+        <nav>
+            <a href="/" class="nav-btn">Dashboard</a>
+            <a href="/admin" class="nav-btn active">Admin</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="admin-section">
+            <h2>Operating Mode</h2>
+            <div class="mode-buttons">
+                <button class="mode-btn" data-mode="fms">FMS</button>
+                <button class="mode-btn" data-mode="adhoc">Adhoc</button>
+                <button class="mode-btn" data-mode="robot_teleop">Robot Teleop</button>
+                <button class="mode-btn" data-mode="robot_practice">Robot Practice</button>
+            </div>
+        </section>
+
+        <section class="admin-section">
+            <h2>Connection Status</h2>
+            <div class="conn-grid">
+                <div class="conn-item">
+                    <span class="status-dot" id="admin-fms-dot"></span>
+                    <span>Modbus / FMS</span>
+                    <span id="admin-fms-text" class="conn-status">—</span>
+                </div>
+                <div class="conn-item">
+                    <span class="status-dot" id="admin-nt-dot"></span>
+                    <span>NetworkTables</span>
+                    <span id="admin-nt-text" class="conn-status">—</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="admin-section">
+            <h2>Ball Simulator</h2>
+            <div class="toggle-row">
+                <span class="toggle-label">Enable add ball button</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="simulator-toggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </section>
+
+        <section class="admin-section">
+            <h2>Score</h2>
+            <div class="score-grid">
+                <div class="score-item"><span class="score-label">Active</span><span id="adm-active">0</span></div>
+                <div class="score-item"><span class="score-label">Auto</span><span id="adm-auto">0</span></div>
+                <div class="score-item"><span class="score-label">Inactive</span><span id="adm-inactive">0</span></div>
+            </div>
+            <div class="actions" style="margin-top:1rem;">
+                <button id="admin-reset-btn" class="action-btn danger">Reset Count</button>
+            </div>
+        </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+    <script>
+        // Admin-page specific: mode buttons
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const mode = btn.dataset.mode;
+                try {
+                    const res = await fetch('/api/mode', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({mode})
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        window.app && window.app.showToast(`Mode set to ${mode}`, 'success');
+                    }
+                } catch(e) {
+                    console.error(e);
+                }
+            });
+        });
+
+        document.getElementById('simulator-toggle').addEventListener('change', async () => {
+            try {
+                await fetch('/api/simulate/toggle', {method: 'POST'});
+            } catch(e) { console.error(e); }
+        });
+
+        document.getElementById('admin-reset-btn').addEventListener('click', async () => {
+            try {
+                await fetch('/api/counts/reset', {method: 'POST'});
+                window.app && window.app.showToast('Counts reset', 'success');
+            } catch(e) { console.error(e); }
+        });
+    </script>
+</body>
+</html>

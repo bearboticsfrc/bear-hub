@@ -1,0 +1,13 @@
+[Unit]
+Description=BearHub FRC Hub Manager
+After=network.target
+
+[Service]
+User=fms
+WorkingDirectory=/home/fms/bear-hub
+ExecStart=authbind --deep /home/fms/bear-hub/.venv/bin/python -m src.main
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
