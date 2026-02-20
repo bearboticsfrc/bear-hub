@@ -51,8 +51,8 @@ rsync -av /path/to/bear-hub/ pi@redhub.local:~/bear-hub/
 cd ~/bear-hub
 uv venv
 source .venv/bin/activate
-uv pip install -e ".[dev]"
-uv pip install -e ".[pi]"     # installs lgpio and spidev
+uv pip install -e ".[pi]"           # installs lgpio and spidev
+pip install robotpy-ntcore          # uv can't resolve robotpy's wheels; use pip directly
 ```
 
 ## 7. Create the state directory
