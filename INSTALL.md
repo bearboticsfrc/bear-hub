@@ -99,19 +99,22 @@ journalctl -u bear-hub -f
 
 ## Modbus port 502
 
-Port 502 is a privileged port (<1024). Use `authbind` to allow the service to bind without running as root:
+> **Required** — port 502 is a privileged port (<1024). Without `authbind` the
+> Modbus server will fail to start and the app will log a `PermissionError`.
+
+Use `authbind` to allow the service to bind port 502 without running as root:
 
 ```bash
 sudo apt install authbind
 sudo touch /etc/authbind/byport/502
 sudo chmod 500 /etc/authbind/byport/502
-sudo chown pi /etc/authbind/byport/502
+sudo chown fms /etc/authbind/byport/502
 ```
 
-Update the `ExecStart` line in the service file:
+Update the `ExecStart` line in the service file to invoke Python through authbind:
 
 ```ini
-ExecStart=authbind --deep /home/pi/bear-hub/.venv/bin/python -m src.main
+ExecStart=authbind --deep /home/fms/bear-hub/.venv/bin/python -m src.main
 ```
 
 Then reload and restart:
@@ -120,3 +123,12 @@ Then reload and restart:
 sudo systemctl daemon-reload
 sudo systemctl restart bear-hub
 ```
+
+To verify authbind is working, check the logs — you should see:
+
+```
+INFO  src.modbus: Starting Modbus TCP server on 0.0.0.0:502
+INFO  pymodbus.logging: Server listening.
+```
+
+If instead you see `PermissionError`, authbind is not configured correctly for the `fms` user.

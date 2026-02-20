@@ -56,7 +56,44 @@ async def get_status() -> dict:
         "modbus_active": s.modbus_active,
         "hub_name": app_instance.hub.name,
         "simulator_enabled": s.simulator_enabled,
+        "nt_server_address": s.nt_server_address,
+        "sacn_active": s.sacn_active,
+        "fms_period": s.fms_period,
+        "seconds_until_inactive": s.seconds_until_inactive,
     }
+
+
+@app.get("/api/network/eth0")
+async def get_eth0() -> dict:
+    from src.network import get_eth0_address
+    address = get_eth0_address()
+    default = app_instance.hub.default_eth0_address if app_instance else None
+    return {"address": address, "default": default}
+
+
+@app.post("/api/network/eth0")
+async def set_eth0(body: dict) -> dict:
+    from src.network import set_eth0_address
+    cidr = body.get("address", "").strip()
+    if not cidr:
+        return {"success": False, "error": "Address is required"}
+    try:
+        set_eth0_address(cidr)
+    except RuntimeError as exc:
+        log.warning("Failed to set eth0 address: %s", exc)
+        return {"success": False, "error": str(exc)}
+    return {"success": True, "address": cidr}
+
+
+@app.post("/api/nt-address")
+async def set_nt_address(body: dict) -> dict:
+    if app_instance is None:
+        return {"success": False}
+    address = body.get("address", "").strip()
+    if not address:
+        return {"success": False, "error": "Address is required"}
+    await app_instance.set_nt_server_address(address)
+    return {"success": True, "address": address}
 
 
 @app.post("/api/simulate/toggle")
@@ -89,7 +126,7 @@ async def set_mode(body: dict) -> dict:
     if app_instance is None:
         return {"success": False}
     mode = body.get("mode", "")
-    valid = {"fms", "adhoc", "robot_teleop", "robot_practice"}
+    valid = {"fms", "demo", "robot_teleop", "robot_practice"}
     if mode not in valid:
         return {"success": False, "error": f"Invalid mode: {mode}"}
     try:
@@ -154,5 +191,9 @@ def _build_state_message(a: App) -> dict:
             "modbus_active": s.modbus_active,
             "hub_name": a.hub.name,
             "simulator_enabled": s.simulator_enabled,
+            "nt_server_address": s.nt_server_address,
+            "sacn_active": s.sacn_active,
+            "fms_period": s.fms_period,
+            "seconds_until_inactive": s.seconds_until_inactive,
         },
     }

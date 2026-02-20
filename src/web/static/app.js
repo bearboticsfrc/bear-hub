@@ -207,8 +207,8 @@ class BearHubApp {
         // Mode badge
         const modeBadge = document.getElementById('mode-badge');
         if (modeBadge) {
-            modeBadge.textContent = data.mode || 'adhoc';
-            modeBadge.className = `mode-badge mode-${data.mode || 'adhoc'}`;
+            modeBadge.textContent = data.mode || 'demo';
+            modeBadge.className = `mode-badge mode-${data.mode || 'demo'}`;
         }
 
         // Status dots — highlight the relevant one for the current mode
@@ -217,22 +217,31 @@ class BearHubApp {
         const fmsItem = fmsDot  && fmsDot.closest('.status-item');
         const ntItem  = ntDot   && ntDot.closest('.status-item');
 
-        if (fmsDot) fmsDot.classList.toggle('connected', !!data.modbus_active);
-        if (ntDot)  ntDot.classList.toggle('connected',  !!data.nt_connected);
+        const sacnDot  = document.getElementById('sacn-dot');
+        const sacnItem = sacnDot && sacnDot.closest('.status-item');
 
-        const mode = data.mode || 'adhoc';
-        if (fmsItem) fmsItem.classList.toggle('active-mode', mode === 'fms');
-        if (ntItem)  ntItem.classList.toggle('active-mode', mode === 'robot_teleop' || mode === 'robot_practice');
+        if (fmsDot)  fmsDot.classList.toggle('connected',  !!data.modbus_active);
+        if (ntDot)   ntDot.classList.toggle('connected',   !!data.nt_connected);
+        if (sacnDot) sacnDot.classList.toggle('connected', !!data.sacn_active);
+
+        const mode = data.mode || 'demo';
+        if (fmsItem)  fmsItem.classList.toggle('active-mode', mode === 'fms');
+        if (ntItem)   ntItem.classList.toggle('active-mode',  mode === 'robot_teleop' || mode === 'robot_practice');
+        if (sacnItem) sacnItem.classList.toggle('active-mode', mode === 'fms');
 
         // Admin page status mirrors
         const aFmsDot  = document.getElementById('admin-fms-dot');
         const aNtDot   = document.getElementById('admin-nt-dot');
         const aFmsTxt  = document.getElementById('admin-fms-text');
         const aNtTxt   = document.getElementById('admin-nt-text');
-        if (aFmsDot) aFmsDot.classList.toggle('connected', !!data.modbus_active);
-        if (aNtDot)  aNtDot.classList.toggle('connected',  !!data.nt_connected);
-        if (aFmsTxt) aFmsTxt.textContent = data.modbus_active ? 'Connected' : 'Disconnected';
-        if (aNtTxt)  aNtTxt.textContent  = data.nt_connected  ? 'Connected' : 'Disconnected';
+        const aSacnDot = document.getElementById('admin-sacn-dot');
+        const aSacnTxt = document.getElementById('admin-sacn-text');
+        if (aFmsDot)  aFmsDot.classList.toggle('connected',  !!data.modbus_active);
+        if (aNtDot)   aNtDot.classList.toggle('connected',   !!data.nt_connected);
+        if (aSacnDot) aSacnDot.classList.toggle('connected', !!data.sacn_active);
+        if (aFmsTxt)  aFmsTxt.textContent  = data.modbus_active ? 'Connected' : 'Disconnected';
+        if (aNtTxt)   aNtTxt.textContent   = data.nt_connected  ? 'Connected' : 'Disconnected';
+        if (aSacnTxt) aSacnTxt.textContent = data.sacn_active   ? 'Active'    : 'No signal';
 
         // Active mode button highlight (admin page)
         document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -280,7 +289,7 @@ class BearHubApp {
 
         // Reset button visibility
         const resetSection = document.getElementById('reset-section');
-        if (resetSection) resetSection.style.display = (mode === 'adhoc') ? '' : 'none';
+        if (resetSection) resetSection.style.display = (mode === 'demo') ? '' : 'none';
 
         // Simulator button visibility
         const simBtn = document.getElementById('simulate-btn');
@@ -289,6 +298,35 @@ class BearHubApp {
         // Simulator toggle (admin page)
         const simToggle = document.getElementById('simulator-toggle');
         if (simToggle) simToggle.checked = !!data.simulator_enabled;
+
+        // Period badge (both pages) — visible only in robot modes
+        const periodBadge = document.getElementById('period-badge');
+        if (periodBadge) {
+            const inRobotMode = mode === 'robot_teleop' || mode === 'robot_practice';
+            periodBadge.style.display = inRobotMode ? '' : 'none';
+            if (inRobotMode) {
+                const period = data.fms_period || 'disabled';
+                periodBadge.textContent = period;
+                periodBadge.className = `period-badge period-${period}`;
+            }
+        }
+
+        // Countdown (dashboard only)
+        const countdownDisplay = document.getElementById('countdown-display');
+        const countdownSeconds = document.getElementById('countdown-seconds');
+        if (countdownDisplay) {
+            const showCountdown = mode === 'robot_practice' && data.seconds_until_inactive >= 0;
+            countdownDisplay.style.display = showCountdown ? '' : 'none';
+            if (showCountdown && countdownSeconds) {
+                countdownSeconds.textContent = Math.max(0, Math.ceil(data.seconds_until_inactive));
+            }
+        }
+
+        // NT server address (admin page) — only update if field is not focused
+        const ntInput = document.getElementById('nt-address-input');
+        if (ntInput && document.activeElement !== ntInput && data.nt_server_address) {
+            ntInput.value = data.nt_server_address;
+        }
     }
 
     setCount(id, value) {

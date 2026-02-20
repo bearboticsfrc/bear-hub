@@ -14,7 +14,8 @@
             <span id="hub-name-badge" class="hub-badge">RedHub</span>
         </div>
         <div class="header-status">
-            <span id="mode-badge" class="mode-badge mode-adhoc">adhoc</span>
+            <span id="mode-badge" class="mode-badge mode-demo">demo</span>
+            <span id="period-badge" class="period-badge" style="display:none;"></span>
             <span class="status-item">
                 <span class="status-dot" id="fms-dot"></span>
                 <span class="status-label">FMS</span>
@@ -22,6 +23,10 @@
             <span class="status-item">
                 <span class="status-dot" id="nt-dot"></span>
                 <span class="status-label">NT</span>
+            </span>
+            <span class="status-item">
+                <span class="status-dot" id="sacn-dot"></span>
+                <span class="status-label">sACN</span>
             </span>
         </div>
         <nav>
@@ -35,7 +40,7 @@
             <h2>Operating Mode</h2>
             <div class="mode-buttons">
                 <button class="mode-btn" data-mode="fms">FMS</button>
-                <button class="mode-btn" data-mode="adhoc">Adhoc</button>
+                <button class="mode-btn" data-mode="demo">Demo</button>
                 <button class="mode-btn" data-mode="robot_teleop">Robot Teleop</button>
                 <button class="mode-btn" data-mode="robot_practice">Robot Practice</button>
             </div>
@@ -54,6 +59,30 @@
                     <span>NetworkTables</span>
                     <span id="admin-nt-text" class="conn-status">—</span>
                 </div>
+                <div class="conn-item">
+                    <span class="status-dot" id="admin-sacn-dot"></span>
+                    <span>sACN</span>
+                    <span id="admin-sacn-text" class="conn-status">—</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="admin-section">
+            <h2>Pi Ethernet Address</h2>
+            <div class="nt-address-row">
+                <input type="text" id="eth0-address-input" class="nt-address-input"
+                       placeholder="192.168.1.100/24" spellcheck="false" autocomplete="off">
+                <button id="eth0-address-save" class="action-btn accent">Save</button>
+            </div>
+            <div id="eth0-current" style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-muted);"></div>
+        </section>
+
+        <section class="admin-section">
+            <h2>NetworkTables Server</h2>
+            <div class="nt-address-row">
+                <input type="text" id="nt-address-input" class="nt-address-input"
+                       placeholder="10.40.68.2" spellcheck="false" autocomplete="off">
+                <button id="nt-address-save" class="action-btn accent">Save</button>
             </div>
         </section>
 
@@ -101,6 +130,74 @@
                     console.error(e);
                 }
             });
+        });
+
+        // Fetch current eth0 address on page load
+        (async () => {
+            try {
+                const res = await fetch('/api/network/eth0');
+                const data = await res.json();
+                const input = document.getElementById('eth0-address-input');
+                const current = document.getElementById('eth0-current');
+                if (data.default) input.placeholder = data.default;
+                if (data.address) {
+                    input.value = data.address;
+                    if (current) current.textContent = `Current: ${data.address}`;
+                } else {
+                    if (current) current.textContent = 'No address assigned';
+                }
+            } catch(e) { console.error(e); }
+        })();
+
+        document.getElementById('eth0-address-save').addEventListener('click', async () => {
+            const address = document.getElementById('eth0-address-input').value.trim();
+            if (!address) return;
+            try {
+                const res = await fetch('/api/network/eth0', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({address})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('eth0-current').textContent = `Current: ${address}`;
+                    window.app && window.app.showToast(`Ethernet address set to ${address}`, 'success');
+                } else {
+                    window.app && window.app.showToast(data.error || 'Failed', 'error');
+                }
+            } catch(e) {
+                console.error(e);
+                window.app && window.app.showToast('Failed to save', 'error');
+            }
+        });
+
+        document.getElementById('eth0-address-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('eth0-address-save').click();
+        });
+
+        document.getElementById('nt-address-save').addEventListener('click', async () => {
+            const address = document.getElementById('nt-address-input').value.trim();
+            if (!address) return;
+            try {
+                const res = await fetch('/api/nt-address', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({address})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    window.app && window.app.showToast(`NT server set to ${address}`, 'success');
+                } else {
+                    window.app && window.app.showToast(data.error || 'Failed', 'error');
+                }
+            } catch(e) {
+                console.error(e);
+                window.app && window.app.showToast('Failed to save', 'error');
+            }
+        });
+
+        document.getElementById('nt-address-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('nt-address-save').click();
         });
 
         document.getElementById('simulator-toggle').addEventListener('change', async () => {

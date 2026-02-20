@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -35,7 +36,7 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class AppState:
-    mode: str = "adhoc"
+    mode: str = "demo"
     active_count: int = 0
     auto_count: int = 0
     inactive_count: int = 0
@@ -44,6 +45,9 @@ class AppState:
     fms_period: str = "disabled"
     hub_is_active: bool = True
     simulator_enabled: bool = False
+    nt_server_address: str = NT_SERVER_ADDRESS
+    sacn_active: bool = False
+    seconds_until_inactive: float = -1.0
 
 
 class App:
@@ -69,6 +73,8 @@ class App:
         self._ball_queue: asyncio.Queue[int] = asyncio.Queue()
         self._led_queue: asyncio.Queue[Color] = asyncio.Queue()
         self._shutdown_event = asyncio.Event()
+        self._auto_grace_until: float = 0.0  # monotonic deadline for auto grace period
+        self._hub_grace_until: float = 0.0   # monotonic deadline for hub-active grace period
 
         self._load_state()
 
@@ -84,7 +90,6 @@ class App:
 
         # Start Modbus server
         await self._modbus.start()
-        self.state.modbus_active = True
 
         # Apply persisted mode
         await self._apply_mode(self.state.mode, loop)
@@ -103,6 +108,7 @@ class App:
         asyncio.create_task(self._process_balls())
         asyncio.create_task(self._process_leds())
         asyncio.create_task(self._status_poll())
+        asyncio.create_task(self._practice_led_task())
 
         log.info("BearHub (%s) running — web at http://%s:%d", self.hub.name, WEB_HOST, WEB_PORT)
 
@@ -155,10 +161,9 @@ class App:
                 self._sacn.start(loop, self._led_queue)
             except Exception:
                 log.warning("sACN unavailable (dev machine?) — FMS LED control disabled")
-            self.state.modbus_active = True
         elif mode in ("robot_teleop", "robot_practice"):
             try:
-                self._nt.start(NT_SERVER_ADDRESS, "bear-hub")
+                self._nt.start(self.state.nt_server_address, "bear-hub")
             except Exception:
                 log.warning("NT unavailable (dev machine?) — robot connection disabled")
             self.state.nt_connected = False  # updated by poll
@@ -176,7 +181,7 @@ class App:
                 continue
 
             mode = self.state.mode
-            if mode == "adhoc":
+            if mode == "demo":
                 self.state.active_count += 1
             else:
                 fms_period = self.state.fms_period
@@ -198,7 +203,7 @@ class App:
                 self._nt.publish_count(active_total)
 
             # Update LEDs for local modes
-            if mode in ("adhoc", "robot_teleop"):
+            if mode in ("demo", "robot_teleop"):
                 self._update_score_leds(active_total)
 
             await self._broadcast_state()
@@ -229,6 +234,69 @@ class App:
         self._leds.set_all(color)
         self._leds.show()
 
+    # ── Practice LED task ────────────────────────────────────────────────
+
+    async def _practice_led_task(self) -> None:
+        """Drive LEDs in robot_practice mode at 250 ms resolution (2 Hz blink).
+
+        Writes to LEDs directly, bypassing the led_queue. The queue is only used
+        in fms mode to receive sACN colours — the two paths never overlap because
+        sACN is stopped and this task sleeps whenever the mode is not robot_practice.
+        """
+        from src.leds import Color
+
+        blink_on = False
+        # Local grace-period timestamps give 250 ms resolution,
+        # independent of the 1 s _status_poll cycle.
+        auto_grace_until = 0.0
+        hub_grace_until = 0.0
+
+        while not self._shutdown_event.is_set():
+            if self.state.mode != "robot_practice":
+                blink_on = False
+                auto_grace_until = 0.0
+                hub_grace_until = 0.0
+                await asyncio.sleep(0.25)
+                continue
+
+            hub_color = Color(*self.hub.led_idle_color)
+            now = time.monotonic()
+            control = self._nt.get_fms_control_data()
+
+            # Period with 3 s auto grace period
+            if control == self._nt.FMS_CONTROL_DATA_AUTO:
+                auto_grace_until = now + 3.0
+                fms_period = "auto"
+            elif now < auto_grace_until:
+                fms_period = "auto"
+            elif control == self._nt.FMS_CONTROL_DATA_TELEOP:
+                fms_period = "teleop"
+            else:
+                fms_period = "disabled"
+
+            # Hub active with 3 s grace period
+            if self._nt.get_practice_hub_active():
+                hub_grace_until = now + 3.0
+                hub_active = True
+            else:
+                hub_active = now < hub_grace_until
+
+            if fms_period == "auto" or (fms_period == "teleop" and hub_active):
+                seconds_left = self._nt.get_seconds_until_inactive()
+                should_blink = fms_period == "teleop" and 0 <= seconds_left <= 3
+                if should_blink:
+                    blink_on = not blink_on
+                    self._leds.set_all(hub_color if blink_on else Color(0, 0, 0))
+                else:
+                    blink_on = False
+                    self._leds.set_all(hub_color)
+                self._leds.show()
+            else:
+                blink_on = False
+                self._leds.clear()
+
+            await asyncio.sleep(0.25)
+
     # ── Status polling ───────────────────────────────────────────────────
 
     async def _status_poll(self) -> None:
@@ -241,22 +309,64 @@ class App:
                     self.state.nt_connected = connected
                     await self._broadcast_state()
 
-                fms_period = self._nt.get_fms_mode()
                 hub_active = self._nt.get_hub_active()
+
+                if self.state.mode == "robot_practice":
+                    now = time.monotonic()
+                    control = self._nt.get_fms_control_data()
+
+                    # Period detection with 3s auto grace period
+                    if control == self._nt.FMS_CONTROL_DATA_AUTO:
+                        self._auto_grace_until = now + 3.0
+                        fms_period = "auto"
+                    elif now < self._auto_grace_until:
+                        fms_period = "auto"
+                    elif control == self._nt.FMS_CONTROL_DATA_TELEOP:
+                        fms_period = "teleop"
+                    else:
+                        fms_period = "disabled"
+
+                    # Hub active with 3s grace period
+                    if self._nt.get_practice_hub_active():
+                        self._hub_grace_until = now + 3.0
+                        hub_active = True
+                    else:
+                        hub_active = now < self._hub_grace_until
+
+                else:
+                    fms_period = self._nt.get_fms_mode()
+
                 changed = (
                     fms_period != self.state.fms_period or hub_active != self.state.hub_is_active
                 )
                 self.state.fms_period = fms_period
                 self.state.hub_is_active = hub_active
 
-                if self.state.mode == "robot_practice":
-                    led_color = self._nt.get_practice_led_color()
-                    if led_color is not None:
-                        self._leds.set_all(led_color)
-                        self._leds.show()
-
                 if changed:
                     await self._broadcast_state()
+
+            # Modbus PLC activity — green only when a holding register was read
+            # within the past second (i.e. the FMS PLC is actively polling)
+            modbus_active = self._modbus.is_plc_active
+            if modbus_active != self.state.modbus_active:
+                self.state.modbus_active = modbus_active
+                await self._broadcast_state()
+
+            # sACN activity (only meaningful in fms mode, but always poll)
+            sacn_active = self._sacn.is_active
+            if sacn_active != self.state.sacn_active:
+                self.state.sacn_active = sacn_active
+                await self._broadcast_state()
+
+            # Seconds until inactive — broadcast each time the integer value changes
+            new_seconds = (
+                self._nt.get_seconds_until_inactive()
+                if self.state.mode == "robot_practice"
+                else -1.0
+            )
+            if int(new_seconds) != int(self.state.seconds_until_inactive):
+                self.state.seconds_until_inactive = new_seconds
+                await self._broadcast_state()
 
     # ── Counts reset ─────────────────────────────────────────────────────
 
@@ -269,6 +379,21 @@ class App:
         elif self.state.mode in ("robot_teleop", "robot_practice"):
             self._nt.publish_count(0)
         self._leds.clear()
+        await self._broadcast_state()
+
+    # ── NT server address ────────────────────────────────────────────────
+
+    async def set_nt_server_address(self, address: str) -> None:
+        self.state.nt_server_address = address
+        log.info("NT server address set to %s", address)
+        if self.state.mode in ("robot_teleop", "robot_practice"):
+            self._nt.stop()
+            self.state.nt_connected = False
+            try:
+                self._nt.start(address, "bear-hub")
+            except Exception:
+                log.warning("NT unavailable — robot connection disabled")
+        self._save_state()
         await self._broadcast_state()
 
     # ── Ball simulator ───────────────────────────────────────────────────
@@ -295,7 +420,8 @@ class App:
             return
         try:
             data = json.loads(path.read_text())
-            self.state.mode = data.get("mode", "adhoc")
+            self.state.mode = data.get("mode", "demo")
+            self.state.nt_server_address = data.get("nt_server_address", NT_SERVER_ADDRESS)
         except Exception:
             log.warning("Could not load state from %s", STATE_FILE)
 
@@ -303,6 +429,9 @@ class App:
         path = Path(STATE_FILE)
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps({"mode": self.state.mode}))
+            path.write_text(json.dumps({
+                "mode": self.state.mode,
+                "nt_server_address": self.state.nt_server_address,
+            }))
         except Exception:
             log.warning("Could not save state to %s", STATE_FILE)

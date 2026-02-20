@@ -14,7 +14,8 @@
             <span id="hub-name-badge" class="hub-badge">RedHub</span>
         </div>
         <div class="header-status">
-            <span id="mode-badge" class="mode-badge mode-adhoc">adhoc</span>
+            <span id="mode-badge" class="mode-badge mode-demo">demo</span>
+            <span id="period-badge" class="period-badge" style="display:none;"></span>
             <span class="status-item">
                 <span class="status-dot" id="fms-dot"></span>
                 <span class="status-label">FMS</span>
@@ -22,6 +23,10 @@
             <span class="status-item">
                 <span class="status-dot" id="nt-dot"></span>
                 <span class="status-label">NT</span>
+            </span>
+            <span class="status-item">
+                <span class="status-dot" id="sacn-dot"></span>
+                <span class="status-label">sACN</span>
             </span>
         </div>
         <nav>
@@ -34,6 +39,9 @@
         <div class="active-display">
             <div class="active-label">ACTIVE BALL COUNT</div>
             <div class="active-count" id="active-count">0</div>
+            <div id="countdown-display" class="countdown-display" style="display:none;">
+                HUB INACTIVE IN <span id="countdown-seconds">--</span>s
+            </div>
         </div>
 
         <div class="chart-container">

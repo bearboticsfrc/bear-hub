@@ -47,10 +47,11 @@ class HubConfig:
     name: str
     modbus_ball_count_register: int  # 0-based pymodbus address
     led_idle_color: tuple[int, int, int]  # RGB
+    default_eth0_address: str  # CIDR, used as placeholder on admin page
 
 
-RED_HUB = HubConfig(name="RedHub", modbus_ball_count_register=0, led_idle_color=(255, 0, 0))
-BLUE_HUB = HubConfig(name="BlueHub", modbus_ball_count_register=1, led_idle_color=(0, 0, 255))
+RED_HUB = HubConfig(name="RedHub",  modbus_ball_count_register=0, led_idle_color=(255, 0, 0), default_eth0_address="10.0.100.43/24")
+BLUE_HUB = HubConfig(name="BlueHub", modbus_ball_count_register=1, led_idle_color=(0, 0, 255), default_eth0_address="10.0.100.44/24")
 
 
 def resolve_hub(arg: str | None) -> HubConfig:

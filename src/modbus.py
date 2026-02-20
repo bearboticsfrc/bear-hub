@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 from pymodbus.datastore import (  # type: ignore[import]
     ModbusDeviceContext,
@@ -22,10 +23,25 @@ from src.config import MODBUS_HOST, MODBUS_PORT, MODBUS_UNIT_ID
 
 log = logging.getLogger(__name__)
 
+MODBUS_ACTIVE_TIMEOUT = 1.0  # seconds
+
+
+class _TrackedHoldingRegisters(ModbusSequentialDataBlock):
+    """Holding register block that records the last time getValues was called."""
+
+    def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        super().__init__(*args, **kwargs)
+        self.last_read_time: float = 0.0
+
+    def getValues(self, address: int, count: int = 1):  # type: ignore[override]
+        self.last_read_time = time.monotonic()
+        return super().getValues(address, count)
+
 
 class ModbusServer:
     def __init__(self) -> None:
-        hr = ModbusSequentialDataBlock(0, [0] * 10)
+        self._hr = _TrackedHoldingRegisters(0, [0] * 10)
+        hr = self._hr
         co = ModbusSequentialDataBlock(0, [False] * 10)
         store = ModbusDeviceContext(hr=hr, co=co)
         self._context = ModbusServerContext(devices=store, single=True)
@@ -42,6 +58,12 @@ class ModbusServer:
                 context=self._context,
                 address=(MODBUS_HOST, MODBUS_PORT),
             )
+        except PermissionError:
+            log.error(
+                "Cannot bind Modbus server on port %d — permission denied. "
+                "Port 502 requires authbind: see INSTALL.md § 'Modbus port 502'.",
+                MODBUS_PORT,
+            )
         except Exception:
             log.exception("Modbus server error")
 
@@ -53,6 +75,11 @@ class ModbusServer:
             except asyncio.CancelledError:
                 pass
         log.info("Modbus server stopped")
+
+    @property
+    def is_plc_active(self) -> bool:
+        """True if a holding register was read within the past second."""
+        return (time.monotonic() - self._hr.last_read_time) < MODBUS_ACTIVE_TIMEOUT
 
     def set_ball_count(self, register: int, count: int) -> None:
         """Write ball count to a holding register (0-based pymodbus address)."""

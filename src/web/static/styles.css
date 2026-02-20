@@ -84,9 +84,33 @@ header {
 }
 
 .mode-fms          { background: var(--accent); }
-.mode-adhoc        { background: #556677; }
+.mode-demo         { background: #556677; }
 .mode-robot_teleop { background: #22AA55; }
 .mode-robot_practice { background: #BB8800; }
+
+/* Period badge */
+.period-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.2rem 0.55rem;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.period-auto     { background: var(--energized);  color: #000; }
+.period-teleop   { background: #22AA55;            color: #fff; }
+.period-disabled { background: #334455;            color: var(--text-muted); }
+
+/* Countdown */
+.countdown-display {
+    margin-top: 0.75rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--energized);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
 
 /* Status dots */
 .status-item {
@@ -328,6 +352,31 @@ main {
 
 .mode-btn:hover { border-color: var(--accent); color: var(--text); }
 .mode-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.nt-address-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.nt-address-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-family: 'Courier New', monospace;
+}
+
+.nt-address-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.action-btn.accent    { background: var(--accent); color: #fff; }
+.action-btn.accent:hover { background: #5599ff; }
 
 .conn-grid, .score-grid {
     display: flex;
