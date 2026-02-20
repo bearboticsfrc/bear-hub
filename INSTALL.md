@@ -48,6 +48,7 @@ rsync -av /path/to/bear-hub/ pi@redhub.local:~/bear-hub/
 ## 6. Install dependencies
 
 ```bash
+sudo apt install -y swig            # required to build robotpy-ntcore from source
 cd ~/bear-hub
 uv venv
 source .venv/bin/activate
