@@ -75,6 +75,7 @@ class App:
         self._shutdown_event = asyncio.Event()
         self._auto_grace_until: float = 0.0  # monotonic deadline for auto grace period
         self._hub_grace_until: float = 0.0   # monotonic deadline for hub-active grace period
+        self._demo_flash_task: asyncio.Task | None = None
 
         self._load_state()
 
@@ -203,7 +204,11 @@ class App:
                 self._nt.publish_count(active_total)
 
             # Update LEDs for local modes
-            if mode in ("demo", "robot_teleop"):
+            if mode == "demo":
+                if self._demo_flash_task and not self._demo_flash_task.done():
+                    self._demo_flash_task.cancel()
+                self._demo_flash_task = asyncio.create_task(self._flash_demo_leds())
+            elif mode == "robot_teleop":
                 self._update_score_leds(active_total)
 
             await self._broadcast_state()
@@ -233,6 +238,18 @@ class App:
             color = Color(r, g, b)
         self._leds.set_all(color)
         self._leds.show()
+
+    async def _flash_demo_leds(self) -> None:
+        """Flash LEDs for 1 second on each ball scored in demo mode."""
+        from src.leds import Color
+        try:
+            self._leds.set_all(Color(*self.hub.led_idle_color))
+            self._leds.show()
+            await asyncio.sleep(1.0)
+            self._leds.clear()
+        except asyncio.CancelledError:
+            self._leds.clear()
+            raise
 
     # ── Practice LED task ────────────────────────────────────────────────
 
