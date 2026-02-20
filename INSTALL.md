@@ -50,10 +50,10 @@ rsync -av /path/to/bear-hub/ pi@redhub.local:~/bear-hub/
 ```bash
 sudo apt install -y swig liblgpio-dev   # swig: build robotpy-ntcore; liblgpio-dev: link lgpio Python package
 cd ~/bear-hub
-uv venv
+uv venv --seed                      # --seed ensures pip is available inside the venv
 source .venv/bin/activate
 uv pip install -e ".[pi]"           # installs lgpio and spidev
-pip install robotpy-ntcore          # uv can't resolve robotpy's wheels; use pip directly
+python -m pip install pyntcore          # use python -m pip, NOT uv pip — uv cannot resolve robotpy packages
 ```
 
 ## 7. Create the state directory

@@ -27,22 +27,27 @@ class BallCounter:
         self._handle: int | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._queue: asyncio.Queue[int] | None = None
+        self._callbacks: list = []  # must hold references or lgpio GCs them
         # Per-channel last-trigger timestamp for software debounce
         self._last_trigger: dict[int, float] = {}
 
     def start(self, loop: asyncio.AbstractEventLoop, queue: asyncio.Queue[int]) -> None:
         import lgpio  # type: ignore[import]
 
+        self._lgpio = lgpio
         self._loop = loop
         self._queue = queue
         self._handle = lgpio.gpiochip_open(0)
 
         for pin in self._pins:
-            lgpio.gpio_claim_input(self._handle, pin)
-            lgpio.gpio_set_debounce_micros(self._handle, pin, BALL_DEBOUNCE_MS * 1000)
-            lgpio.callback(self._handle, pin, lgpio.FALLING_EDGE, self._on_edge)
+            lgpio.gpio_claim_alert(self._handle, pin, lgpio.BOTH_EDGES, lgpio.SET_PULL_UP)
+            cb = lgpio.callback(self._handle, pin, lgpio.BOTH_EDGES, self._on_edge)
+            self._callbacks.append(cb)
 
     def _on_edge(self, chip: int, gpio: int, level: int, tick: int) -> None:
+        # Read actual pin state — the level parameter is unreliable with bounce
+        if self._lgpio.gpio_read(self._handle, gpio) != 0:
+            return  # pin is HIGH = beam intact / button released
         now = time.monotonic()
         last = self._last_trigger.get(gpio, 0.0)
         if (now - last) * 1000 < BALL_DEBOUNCE_MS:
@@ -54,6 +59,9 @@ class BallCounter:
             self._loop.call_soon_threadsafe(self._queue.put_nowait, channel)
 
     def stop(self) -> None:
+        for cb in self._callbacks:
+            cb.cancel()
+        self._callbacks.clear()
         if self._handle is not None:
             import lgpio  # type: ignore[import]
 
