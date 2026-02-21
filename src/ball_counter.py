@@ -40,7 +40,7 @@ class BallCounter:
         self._handle = lgpio.gpiochip_open(0)
 
         for pin in self._pins:
-            lgpio.gpio_claim_alert(self._handle, pin, lgpio.BOTH_EDGES, lgpio.SET_PULL_UP)
+            lgpio.gpio_claim_alert(self._handle, pin, lgpio.BOTH_EDGES)
             cb = lgpio.callback(self._handle, pin, lgpio.BOTH_EDGES, self._on_edge)
             self._callbacks.append(cb)
 
