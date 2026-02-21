@@ -8,7 +8,31 @@ Instructions for deploying bear-hub on a fresh Raspberry Pi 5 running Raspberry 
 sudo hostnamectl set-hostname redhub   # or bluehub
 ```
 
-## 2. Enable SPI
+## 2. Wire the ball sensors
+
+Each of the four sensor channels requires an external **10 kΩ pull-up resistor** — the Pi 5 kernel does not support software pull-up configuration via the GPIO character device.
+
+```
+3.3V ──[10kΩ]──┬── GPIO pin
+               │
+          [sensor / button]
+               │
+              GND
+```
+
+| Channel | BCM GPIO | Header pin | GND pin |
+|---------|----------|------------|---------|
+| 0 | GPIO 23 | Pin 16 | Pin 14 |
+| 1 | GPIO 24 | Pin 18 | Pin 20 |
+| 2 | GPIO 25 | Pin 22 | Pin 25 |
+| 3 | GPIO 16 | Pin 36 | Pin 34 |
+
+Sensor logic: beam intact = HIGH, beam broken (ball scored) = LOW.
+For testing without sensors, wire a momentary pushbutton between the GPIO pin and GND (press = ball scored).
+
+---
+
+## 3. Enable SPI
 
 ```bash
 sudo nano /boot/firmware/config.txt
@@ -22,7 +46,7 @@ dtparam=spi=on
 
 Reboot for the change to take effect.
 
-## 3. Add your user to the required groups
+## 4. Add your user to the required groups
 
 ```bash
 sudo usermod -aG gpio,spi $USER
@@ -30,14 +54,14 @@ sudo usermod -aG gpio,spi $USER
 
 Log out and back in for group membership to take effect.
 
-## 4. Install uv
+## 5. Install uv
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source $HOME/.local/bin/env
 ```
 
-## 5. Copy the code to the Pi
+## 6. Copy the code to the Pi
 
 From your dev machine:
 
@@ -45,7 +69,7 @@ From your dev machine:
 rsync -av /path/to/bear-hub/ pi@redhub.local:~/bear-hub/
 ```
 
-## 6. Install dependencies
+## 7. Install dependencies
 
 ```bash
 sudo apt install -y swig liblgpio-dev   # swig: build robotpy-ntcore; liblgpio-dev: link lgpio Python package
@@ -56,14 +80,14 @@ uv pip install -e ".[pi]"           # installs lgpio and spidev
 python -m pip install pyntcore          # use python -m pip, NOT uv pip — uv cannot resolve robotpy packages
 ```
 
-## 7. Create the state directory
+## 8. Create the state directory
 
 ```bash
 sudo mkdir -p /var/lib/bear-hub
 sudo chown $USER:$USER /var/lib/bear-hub
 ```
 
-## 8. Run
+## 9. Run
 
 ```bash
 python -m src.main          # auto-detects hub from hostname (redhub → RedHub, bluehub → BlueHub)
