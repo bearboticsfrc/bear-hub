@@ -48,6 +48,7 @@ class AppState:
     nt_server_address: str = NT_SERVER_ADDRESS
     sacn_active: bool = False
     seconds_until_inactive: float = -1.0
+    motors_running: bool = False
 
 
 class App:
@@ -414,6 +415,9 @@ class App:
                 for i in range(num_motors):
                     throttles[i] = self._nt.get_motor_throttle(i)
 
+            elif self.state.motors_running:
+                throttles = [1.0] * num_motors
+
             for i, throttle in enumerate(throttles):
                 self._motors.set_throttle(i, throttle)
 
@@ -453,6 +457,15 @@ class App:
         log.info("Ball simulator %s", "enabled" if self.state.simulator_enabled else "disabled")
         await self._broadcast_state()
         return self.state.simulator_enabled
+
+    # ── Motors ───────────────────────────────────────────────────────────
+
+    async def toggle_motors(self) -> bool:
+        """Toggle motors on/off manually. Returns the new state."""
+        self.state.motors_running = not self.state.motors_running
+        log.info("Motors %s", "started" if self.state.motors_running else "stopped")
+        await self._broadcast_state()
+        return self.state.motors_running
 
     # ── State broadcast ──────────────────────────────────────────────────
 
