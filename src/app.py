@@ -49,6 +49,7 @@ class AppState:
     sacn_active: bool = False
     seconds_until_inactive: float = -1.0
     motors_running: bool = False
+    led_color: tuple[int, int, int] = (0, 0, 0)
 
 
 class App:
@@ -226,6 +227,10 @@ class App:
                 continue
             self._leds.set_all(color)
             self._leds.show()
+            new_color = (color.r, color.g, color.b)
+            if new_color != self.state.led_color:
+                self.state.led_color = new_color
+                await self._broadcast_state()
 
     def _update_score_leds(self, count: int) -> None:
         from src.config import THRESHOLD_ENERGIZED, THRESHOLD_SUPERCHARGED
@@ -238,6 +243,7 @@ class App:
         else:
             r, g, b = self.hub.led_idle_color
             color = Color(r, g, b)
+        self.state.led_color = (color.r, color.g, color.b)
         self._leds.set_all(color)
         self._leds.show()
 
@@ -245,11 +251,16 @@ class App:
         """Flash LEDs for 1 second on each ball scored in demo mode."""
         from src.leds import Color
         try:
+            self.state.led_color = self.hub.led_idle_color
             self._leds.set_all(Color(*self.hub.led_idle_color))
             self._leds.show()
+            await self._broadcast_state()
             await asyncio.sleep(1.0)
+            self.state.led_color = (0, 0, 0)
             self._leds.clear()
+            await self._broadcast_state()
         except asyncio.CancelledError:
+            self.state.led_color = (0, 0, 0)
             self._leds.clear()
             raise
 
@@ -305,14 +316,22 @@ class App:
                 should_blink = fms_period == "teleop" and 0 <= seconds_left <= 3
                 if should_blink:
                     blink_on = not blink_on
-                    self._leds.set_all(hub_color if blink_on else Color(0, 0, 0))
+                    active_color = hub_color if blink_on else Color(0, 0, 0)
+                    self._leds.set_all(active_color)
+                    new_led_color = (active_color.r, active_color.g, active_color.b)
                 else:
                     blink_on = False
                     self._leds.set_all(hub_color)
+                    new_led_color = (hub_color.r, hub_color.g, hub_color.b)
                 self._leds.show()
             else:
                 blink_on = False
                 self._leds.clear()
+                new_led_color = (0, 0, 0)
+
+            if new_led_color != self.state.led_color:
+                self.state.led_color = new_led_color
+                await self._broadcast_state()
 
             await asyncio.sleep(0.25)
 
@@ -427,6 +446,7 @@ class App:
         self.state.active_count = 0
         self.state.auto_count = 0
         self.state.inactive_count = 0
+        self.state.led_color = (0, 0, 0)
         if self.state.mode == "fms":
             self._modbus.set_ball_count(self.hub.modbus_ball_count_register, 0)
         elif self.state.mode in ("robot_teleop", "robot_practice"):

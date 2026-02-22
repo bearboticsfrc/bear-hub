@@ -141,6 +141,7 @@ class BearHubApp {
 
     init() {
         this.setupConfetti();
+        this.setupLedBar();
         this.bindResetButton();
         this.connectWebSocket();
     }
@@ -346,6 +347,11 @@ class BearHubApp {
         if (ntInput && document.activeElement !== ntInput && data.nt_server_address) {
             ntInput.value = data.nt_server_address;
         }
+
+        // LED bar color
+        if (this.ledBar) {
+            this.ledBar.style.setProperty('--led-dot-color', data.led_color || '#000000');
+        }
     }
 
     setCount(id, value) {
@@ -481,6 +487,32 @@ class BearHubApp {
             requestAnimationFrame(() => this.animateConfetti());
         } else {
             this.confettiRunning = false;
+        }
+    }
+
+    // ── LED bar ───────────────────────────────────────────────────────────
+
+    setupLedBar() {
+        this.ledBar = document.getElementById('led-bar');
+        if (!this.ledBar) return;
+        this._buildLedDots();
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => this._buildLedDots(), 150);
+        });
+    }
+
+    _buildLedDots() {
+        if (!this.ledBar) return;
+        const dotSize = 10;
+        const minGap = 6;
+        const count = Math.max(1, Math.floor(window.innerWidth / (dotSize + minGap)));
+        this.ledBar.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'led-dot';
+            this.ledBar.appendChild(dot);
         }
     }
 
