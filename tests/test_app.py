@@ -354,3 +354,104 @@ async def test_practice_hub_grace_period_holds_hub_active():
             pass
 
     assert app.state.hub_is_active is True
+
+
+# ── Motor polling (FMS coil control) ─────────────────────────────────────────
+
+
+async def _run_motor_poll_once(app) -> None:
+    """Let _motor_poll execute one full iteration then cancel it.
+
+    _motor_poll starts with asyncio.sleep(0.05); waiting 60 ms guarantees the
+    first logic pass runs before the task is cancelled.  asyncio.sleep is
+    properly cancellable so a single task.cancel() is sufficient here.
+    """
+    task = asyncio.create_task(app._motor_poll())
+    await asyncio.sleep(0.06)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_fms_motor_enable_forward_sets_full_forward_throttle():
+    """Coil enable=True, forward=True → throttle +1.0 for that motor."""
+    app = _make_app()
+    app.state.mode = "fms"
+    mock_motors = MagicMock()
+    app._motors = mock_motors
+    # motor 0: enable, forward=True; motor 1: disabled
+    coils = {0: True, 1: True, 2: False, 3: False}
+    app._modbus.get_coil = MagicMock(side_effect=lambda addr: coils.get(addr, False))
+
+    await _run_motor_poll_once(app)
+
+    mock_motors.set_throttle.assert_any_call(0, 1.0)
+    mock_motors.set_throttle.assert_any_call(1, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_fms_motor_enable_reverse_sets_full_reverse_throttle():
+    """Coil enable=True, forward=False → throttle -1.0 for that motor."""
+    app = _make_app()
+    app.state.mode = "fms"
+    mock_motors = MagicMock()
+    app._motors = mock_motors
+    # motor 0: enable, forward=False (reverse)
+    coils = {0: True, 1: False, 2: False, 3: False}
+    app._modbus.get_coil = MagicMock(side_effect=lambda addr: coils.get(addr, False))
+
+    await _run_motor_poll_once(app)
+
+    mock_motors.set_throttle.assert_any_call(0, -1.0)
+
+
+@pytest.mark.asyncio
+async def test_fms_motor_disabled_coil_idles_motor():
+    """Coil enable=False → throttle 0.0 regardless of forward coil."""
+    app = _make_app()
+    app.state.mode = "fms"
+    mock_motors = MagicMock()
+    app._motors = mock_motors
+    app._modbus.get_coil = MagicMock(return_value=False)  # all coils off
+
+    await _run_motor_poll_once(app)
+
+    mock_motors.set_throttle.assert_any_call(0, 0.0)
+    mock_motors.set_throttle.assert_any_call(1, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_fms_both_motors_independently_controlled():
+    """Each motor reads its own coil pair (offsets 0-1 and 2-3)."""
+    app = _make_app()
+    app.state.mode = "fms"
+    mock_motors = MagicMock()
+    app._motors = mock_motors
+    # motor 0: forward; motor 1: reverse
+    coils = {0: True, 1: True, 2: True, 3: False}
+    app._modbus.get_coil = MagicMock(side_effect=lambda addr: coils.get(addr, False))
+
+    await _run_motor_poll_once(app)
+
+    mock_motors.set_throttle.assert_any_call(0, 1.0)
+    mock_motors.set_throttle.assert_any_call(1, -1.0)
+
+
+@pytest.mark.asyncio
+async def test_non_fms_mode_motors_idle():
+    """In demo mode the motor poll sends zero throttle (coils are ignored)."""
+    app = _make_app()
+    app.state.mode = "demo"
+    mock_motors = MagicMock()
+    app._motors = mock_motors
+    # Even if coils were set, they should not be read in demo mode
+    app._modbus.get_coil = MagicMock(return_value=True)
+
+    await _run_motor_poll_once(app)
+
+    mock_motors.set_throttle.assert_any_call(0, 0.0)
+    mock_motors.set_throttle.assert_any_call(1, 0.0)
+    app._modbus.get_coil.assert_not_called()
