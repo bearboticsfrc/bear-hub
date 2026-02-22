@@ -61,6 +61,7 @@ async def get_status() -> dict:
         "fms_period": s.fms_period,
         "seconds_until_inactive": s.seconds_until_inactive,
         "motors_running": s.motors_running,
+        "led_color": "#{:02x}{:02x}{:02x}".format(*s.led_color),
     }
 
 
@@ -205,5 +206,6 @@ def _build_state_message(a: App) -> dict:
             "fms_period": s.fms_period,
             "seconds_until_inactive": s.seconds_until_inactive,
             "motors_running": s.motors_running,
+            "led_color": "#{:02x}{:02x}{:02x}".format(*s.led_color),
         },
     }
