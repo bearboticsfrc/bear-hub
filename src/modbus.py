@@ -5,10 +5,8 @@ Register map:
   Holding register 1 (addr 40002): BlueHub ball count (uint16)  — Pi writes, PLC reads
 
   Coil map (PLC writes, Pi reads) — see config.MOTOR_COIL_BASE:
-    coil 0: motor 0 enable  (True = run)
-    coil 1: motor 0 forward (True = forward, False = reverse)
-    coil 2: motor 1 enable
-    coil 3: motor 1 forward
+    coil 0: enable  (True = run both motors)
+    coil 1: forward (True = forward, False = reverse — both motors)
 """
 
 from __future__ import annotations

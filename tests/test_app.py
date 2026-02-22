@@ -377,40 +377,41 @@ async def _run_motor_poll_once(app) -> None:
 
 @pytest.mark.asyncio
 async def test_fms_motor_enable_forward_sets_full_forward_throttle():
-    """Coil enable=True, forward=True → throttle +1.0 for that motor."""
+    """Coil enable=True, forward=True → throttle +1.0 on both motors."""
     app = _make_app()
     app.state.mode = "fms"
     mock_motors = MagicMock()
     app._motors = mock_motors
-    # motor 0: enable, forward=True; motor 1: disabled
-    coils = {0: True, 1: True, 2: False, 3: False}
+    # shared coil pair: enable=True, forward=True
+    coils = {0: True, 1: True}
     app._modbus.get_coil = MagicMock(side_effect=lambda addr: coils.get(addr, False))
 
     await _run_motor_poll_once(app)
 
     mock_motors.set_throttle.assert_any_call(0, 1.0)
-    mock_motors.set_throttle.assert_any_call(1, 0.0)
+    mock_motors.set_throttle.assert_any_call(1, 1.0)
 
 
 @pytest.mark.asyncio
 async def test_fms_motor_enable_reverse_sets_full_reverse_throttle():
-    """Coil enable=True, forward=False → throttle -1.0 for that motor."""
+    """Coil enable=True, forward=False → throttle -1.0 on both motors."""
     app = _make_app()
     app.state.mode = "fms"
     mock_motors = MagicMock()
     app._motors = mock_motors
-    # motor 0: enable, forward=False (reverse)
-    coils = {0: True, 1: False, 2: False, 3: False}
+    # shared coil pair: enable=True, forward=False (reverse)
+    coils = {0: True, 1: False}
     app._modbus.get_coil = MagicMock(side_effect=lambda addr: coils.get(addr, False))
 
     await _run_motor_poll_once(app)
 
     mock_motors.set_throttle.assert_any_call(0, -1.0)
+    mock_motors.set_throttle.assert_any_call(1, -1.0)
 
 
 @pytest.mark.asyncio
 async def test_fms_motor_disabled_coil_idles_motor():
-    """Coil enable=False → throttle 0.0 regardless of forward coil."""
+    """Coil enable=False → throttle 0.0 on both motors regardless of forward coil."""
     app = _make_app()
     app.state.mode = "fms"
     mock_motors = MagicMock()
@@ -424,20 +425,23 @@ async def test_fms_motor_disabled_coil_idles_motor():
 
 
 @pytest.mark.asyncio
-async def test_fms_both_motors_independently_controlled():
-    """Each motor reads its own coil pair (offsets 0-1 and 2-3)."""
+async def test_fms_both_motors_share_single_coil_pair():
+    """Both motors receive the same throttle from the shared coil pair (coils 0 and 1)."""
     app = _make_app()
     app.state.mode = "fms"
     mock_motors = MagicMock()
     app._motors = mock_motors
-    # motor 0: forward; motor 1: reverse
-    coils = {0: True, 1: True, 2: True, 3: False}
+    # enable=True, forward=True → both motors +1.0
+    coils = {0: True, 1: True}
     app._modbus.get_coil = MagicMock(side_effect=lambda addr: coils.get(addr, False))
 
     await _run_motor_poll_once(app)
 
+    # Only coils 0 and 1 should be read — not 2 or 3
+    read_addrs = [call.args[0] for call in app._modbus.get_coil.call_args_list]
+    assert set(read_addrs) == {0, 1}
     mock_motors.set_throttle.assert_any_call(0, 1.0)
-    mock_motors.set_throttle.assert_any_call(1, -1.0)
+    mock_motors.set_throttle.assert_any_call(1, 1.0)
 
 
 @pytest.mark.asyncio
