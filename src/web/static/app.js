@@ -220,14 +220,19 @@ class BearHubApp {
         const sacnDot  = document.getElementById('sacn-dot');
         const sacnItem = sacnDot && sacnDot.closest('.status-item');
 
-        if (fmsDot)  fmsDot.classList.toggle('connected',  !!data.modbus_active);
-        if (ntDot)   ntDot.classList.toggle('connected',   !!data.nt_connected);
-        if (sacnDot) sacnDot.classList.toggle('connected', !!data.sacn_active);
+        const motorsDot  = document.getElementById('motors-dot');
+        const motorsItem = motorsDot && motorsDot.closest('.status-item');
+
+        if (fmsDot)    fmsDot.classList.toggle('connected',    !!data.modbus_active);
+        if (ntDot)     ntDot.classList.toggle('connected',     !!data.nt_connected);
+        if (sacnDot)   sacnDot.classList.toggle('connected',   !!data.sacn_active);
+        if (motorsDot) motorsDot.classList.toggle('connected', !!data.motors_running);
 
         const mode = data.mode || 'demo';
-        if (fmsItem)  fmsItem.classList.toggle('active-mode', mode === 'fms');
-        if (ntItem)   ntItem.classList.toggle('active-mode',  mode === 'robot_teleop' || mode === 'robot_practice');
-        if (sacnItem) sacnItem.classList.toggle('active-mode', mode === 'fms');
+        if (fmsItem)    fmsItem.classList.toggle('active-mode', mode === 'fms');
+        if (ntItem)     ntItem.classList.toggle('active-mode',  mode === 'robot_teleop' || mode === 'robot_practice');
+        if (sacnItem)   sacnItem.classList.toggle('active-mode', mode === 'fms');
+        if (motorsItem) motorsItem.classList.add('active-mode');
 
         // Admin page status mirrors
         const aFmsDot  = document.getElementById('admin-fms-dot');
