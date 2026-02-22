@@ -58,10 +58,10 @@ def main() -> None:
         motors = Motors()
     else:
         from src.ball_counter import NullBallCounter
-        from src.motors import MockMotors
+        from src.motors import NullMotors
 
         ball_counter = NullBallCounter()
-        motors = MockMotors()
+        motors = NullMotors()
 
     modbus = ModbusServer()
     nt_client = NTClient()
