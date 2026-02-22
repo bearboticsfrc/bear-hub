@@ -103,12 +103,11 @@
 
         <section class="admin-section">
             <h2>Motors</h2>
-            <div class="toggle-row">
-                <span class="toggle-label">Run motors at full speed</span>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="motors-toggle">
-                    <span class="toggle-slider"></span>
-                </label>
+            <div class="nt-address-row">
+                <label for="motor-speed-input" class="toggle-label">Speed (0 – 100%)</label>
+                <input type="number" id="motor-speed-input" class="nt-address-input"
+                       min="0" max="100" step="1" placeholder="100" style="width:6rem;">
+                <button id="motor-speed-save" class="action-btn accent">Save</button>
             </div>
         </section>
 
@@ -221,10 +220,24 @@
             } catch(e) { console.error(e); }
         });
 
-        document.getElementById('motors-toggle').addEventListener('change', async () => {
+        document.getElementById('motor-speed-save').addEventListener('click', async () => {
+            const pct = parseFloat(document.getElementById('motor-speed-input').value);
+            if (isNaN(pct)) return;
             try {
-                await fetch('/api/motors/toggle', {method: 'POST'});
+                const res = await fetch('/api/motors/speed', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({speed: Math.max(0, Math.min(100, pct)) / 100})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    window.app && window.app.showToast(`Motor speed set to ${Math.round(data.motor_speed * 100)}%`, 'success');
+                }
             } catch(e) { console.error(e); }
+        });
+
+        document.getElementById('motor-speed-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('motor-speed-save').click();
         });
 
         document.getElementById('admin-reset-btn').addEventListener('click', async () => {

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 import uvicorn
 
 from src.config import (
+    MOTOR_SPEED,
     NT_SERVER_ADDRESS,
     STATE_FILE,
     WEB_HOST,
@@ -49,6 +50,7 @@ class AppState:
     sacn_active: bool = False
     seconds_until_inactive: float = -1.0
     motors_running: bool = False
+    motor_speed: float = MOTOR_SPEED
     led_color: tuple[int, int, int] = (0, 0, 0)
 
 
@@ -435,7 +437,7 @@ class App:
                     throttles[i] = self._nt.get_motor_throttle(i)
 
             elif self.state.motors_running:
-                throttles = [1.0] * num_motors
+                throttles = [self.state.motor_speed] * num_motors
 
             for i, throttle in enumerate(throttles):
                 self._motors.set_throttle(i, throttle)
@@ -487,6 +489,13 @@ class App:
         await self._broadcast_state()
         return self.state.motors_running
 
+    async def set_motor_speed(self, speed: float) -> None:
+        """Set manual motor speed (0.0 – 1.0) and persist it."""
+        self.state.motor_speed = max(0.0, min(1.0, speed))
+        log.info("Motor speed set to %.2f", self.state.motor_speed)
+        self._save_state()
+        await self._broadcast_state()
+
     # ── State broadcast ──────────────────────────────────────────────────
 
     async def _broadcast_state(self) -> None:
@@ -504,6 +513,7 @@ class App:
             data = json.loads(path.read_text())
             self.state.mode = data.get("mode", "demo")
             self.state.nt_server_address = data.get("nt_server_address", NT_SERVER_ADDRESS)
+            self.state.motor_speed = float(data.get("motor_speed", MOTOR_SPEED))
         except Exception:
             log.warning("Could not load state from %s", STATE_FILE)
 
@@ -514,6 +524,7 @@ class App:
             path.write_text(json.dumps({
                 "mode": self.state.mode,
                 "nt_server_address": self.state.nt_server_address,
+                "motor_speed": self.state.motor_speed,
             }))
         except Exception:
             log.warning("Could not save state to %s", STATE_FILE)

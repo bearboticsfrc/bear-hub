@@ -315,9 +315,11 @@ class BearHubApp {
             motorsBtn.classList.toggle('motors-start', !running);
         }
 
-        // Motors toggle (admin page)
-        const motorsToggle = document.getElementById('motors-toggle');
-        if (motorsToggle) motorsToggle.checked = !!data.motors_running;
+        // Motor speed input (admin page) — populate if not focused
+        const motorSpeedInput = document.getElementById('motor-speed-input');
+        if (motorSpeedInput && document.activeElement !== motorSpeedInput && data.motor_speed != null) {
+            motorSpeedInput.value = Math.round(data.motor_speed * 100);
+        }
 
         // Period badge (both pages) — visible only in robot modes
         const periodBadge = document.getElementById('period-badge');

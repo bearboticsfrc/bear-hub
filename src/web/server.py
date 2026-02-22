@@ -61,6 +61,7 @@ async def get_status() -> dict:
         "fms_period": s.fms_period,
         "seconds_until_inactive": s.seconds_until_inactive,
         "motors_running": s.motors_running,
+        "motor_speed": s.motor_speed,
         "led_color": "#{:02x}{:02x}{:02x}".format(*s.led_color),
     }
 
@@ -106,12 +107,16 @@ async def simulate_toggle() -> dict:
     return {"success": True, "simulator_enabled": enabled}
 
 
-@app.post("/api/motors/toggle")
-async def motors_toggle() -> dict:
+@app.post("/api/motors/speed")
+async def motors_speed(body: dict) -> dict:
     if app_instance is None:
         return {"success": False}
-    running = await app_instance.toggle_motors()
-    return {"success": True, "motors_running": running}
+    try:
+        speed = float(body["speed"])
+    except (KeyError, ValueError):
+        return {"success": False, "error": "invalid speed"}
+    await app_instance.set_motor_speed(speed)
+    return {"success": True, "motor_speed": app_instance.state.motor_speed}
 
 
 @app.post("/api/simulate/ball")
