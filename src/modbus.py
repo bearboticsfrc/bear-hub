@@ -1,9 +1,12 @@
 """Modbus TCP server — Pi is the slave (server), FMS PLC is the master (client).
 
 Register map:
-  Holding register 0 (addr 40001): RedHub ball count (uint16)
-  Holding register 1 (addr 40002): BlueHub ball count (uint16)
-  Coils: motor commands from PLC (addresses TBD)
+  Holding register 0 (addr 40001): RedHub ball count (uint16)   — Pi writes, PLC reads
+  Holding register 1 (addr 40002): BlueHub ball count (uint16)  — Pi writes, PLC reads
+
+  Coil map (PLC writes, Pi reads) — see config.MOTOR_COIL_BASE:
+    coil 0: enable  (True = run both motors)
+    coil 1: forward (True = forward, False = reverse — both motors)
 """
 
 from __future__ import annotations

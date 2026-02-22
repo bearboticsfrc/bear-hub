@@ -157,6 +157,30 @@ nav {
 .nav-btn:hover { border-color: var(--accent); color: var(--text); }
 .nav-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
+/* ── LED bar ── */
+#led-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+    width: 100%;
+    padding: 7px 4px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    --led-dot-color: #000000;
+    overflow: hidden;
+}
+
+.led-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--led-dot-color);
+    box-shadow: 0 0 6px 2px var(--led-dot-color);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
 /* ── Main layout ── */
 main {
     max-width: 800px;
@@ -267,6 +291,11 @@ main {
 
 .action-btn.simulate { background: var(--accent); color: #fff; font-size: 1.1rem; padding: 0.7rem 2.5rem; }
 .action-btn.simulate:hover { background: #5599ff; }
+
+.action-btn.motors-start { background: #22AA55; color: #fff; }
+.action-btn.motors-start:hover { background: #33BB66; }
+.action-btn.motors-stop  { background: var(--disconnected); color: #fff; }
+.action-btn.motors-stop:hover  { background: #dd4444; }
 
 /* ── Toggle switch ── */
 .toggle-row {

@@ -141,6 +141,7 @@ class BearHubApp {
 
     init() {
         this.setupConfetti();
+        this.setupLedBar();
         this.bindResetButton();
         this.connectWebSocket();
     }
@@ -220,14 +221,19 @@ class BearHubApp {
         const sacnDot  = document.getElementById('sacn-dot');
         const sacnItem = sacnDot && sacnDot.closest('.status-item');
 
-        if (fmsDot)  fmsDot.classList.toggle('connected',  !!data.modbus_active);
-        if (ntDot)   ntDot.classList.toggle('connected',   !!data.nt_connected);
-        if (sacnDot) sacnDot.classList.toggle('connected', !!data.sacn_active);
+        const motorsDot  = document.getElementById('motors-dot');
+        const motorsItem = motorsDot && motorsDot.closest('.status-item');
+
+        if (fmsDot)    fmsDot.classList.toggle('connected',    !!data.modbus_active);
+        if (ntDot)     ntDot.classList.toggle('connected',     !!data.nt_connected);
+        if (sacnDot)   sacnDot.classList.toggle('connected',   !!data.sacn_active);
+        if (motorsDot) motorsDot.classList.toggle('connected', !!data.motors_running);
 
         const mode = data.mode || 'demo';
-        if (fmsItem)  fmsItem.classList.toggle('active-mode', mode === 'fms');
-        if (ntItem)   ntItem.classList.toggle('active-mode',  mode === 'robot_teleop' || mode === 'robot_practice');
-        if (sacnItem) sacnItem.classList.toggle('active-mode', mode === 'fms');
+        if (fmsItem)    fmsItem.classList.toggle('active-mode', mode === 'fms');
+        if (ntItem)     ntItem.classList.toggle('active-mode',  mode === 'robot_teleop' || mode === 'robot_practice');
+        if (sacnItem)   sacnItem.classList.toggle('active-mode', mode === 'fms');
+        if (motorsItem) motorsItem.classList.add('active-mode');
 
         // Admin page status mirrors
         const aFmsDot  = document.getElementById('admin-fms-dot');
@@ -299,6 +305,22 @@ class BearHubApp {
         const simToggle = document.getElementById('simulator-toggle');
         if (simToggle) simToggle.checked = !!data.simulator_enabled;
 
+        // Motors button (dashboard) — always visible; label reflects state
+        const motorsBtn = document.getElementById('motors-btn');
+        if (motorsBtn) {
+            const running = !!data.motors_running;
+            motorsBtn.style.display = '';
+            motorsBtn.textContent = running ? 'Stop Motors' : 'Start Motors';
+            motorsBtn.classList.toggle('motors-stop', running);
+            motorsBtn.classList.toggle('motors-start', !running);
+        }
+
+        // Motor speed input (admin page) — populate if not focused
+        const motorSpeedInput = document.getElementById('motor-speed-input');
+        if (motorSpeedInput && document.activeElement !== motorSpeedInput && data.motor_speed != null) {
+            motorSpeedInput.value = Math.round(data.motor_speed * 100);
+        }
+
         // Period badge (both pages) — visible only in robot modes
         const periodBadge = document.getElementById('period-badge');
         if (periodBadge) {
@@ -326,6 +348,11 @@ class BearHubApp {
         const ntInput = document.getElementById('nt-address-input');
         if (ntInput && document.activeElement !== ntInput && data.nt_server_address) {
             ntInput.value = data.nt_server_address;
+        }
+
+        // LED bar color
+        if (this.ledBar) {
+            this.ledBar.style.setProperty('--led-dot-color', data.led_color || '#000000');
         }
     }
 
@@ -465,9 +492,46 @@ class BearHubApp {
         }
     }
 
-    // ── Reset button ──────────────────────────────────────────────────────
+    // ── LED bar ───────────────────────────────────────────────────────────
+
+    setupLedBar() {
+        this.ledBar = document.getElementById('led-bar');
+        if (!this.ledBar) return;
+        this._buildLedDots();
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => this._buildLedDots(), 150);
+        });
+    }
+
+    _buildLedDots() {
+        if (!this.ledBar) return;
+        const dotSize = 10;
+        const minGap = 6;
+        const count = Math.max(1, Math.floor(window.innerWidth / (dotSize + minGap)));
+        this.ledBar.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'led-dot';
+            this.ledBar.appendChild(dot);
+        }
+    }
+
+    // ── Reset / Motors buttons ────────────────────────────────────────────
 
     bindResetButton() {
+        const motorsBtn = document.getElementById('motors-btn');
+        if (motorsBtn) {
+            motorsBtn.addEventListener('click', async () => {
+                try {
+                    await fetch('/api/motors/toggle', { method: 'POST' });
+                } catch (e) {
+                    this.showToast('Motor toggle failed', 'error');
+                }
+            });
+        }
+
         const btn = document.getElementById('reset-btn');
         if (btn) {
             btn.addEventListener('click', async () => {

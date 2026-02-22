@@ -15,8 +15,13 @@ SPI_BUS: int = 0
 SPI_DEVICE: int = 0
 SPI_SPEED_HZ: int = 6_500_000
 
-# --- Motors (PWM pins TBD) ---
-MOTOR_PINS: list[int] = []  # TODO: assign when hardware is known
+# --- Motors (hardware PWM — Pi 5 supports PWM on GPIO 12, 13, 18, 19) ---
+MOTOR_PINS: list[int] = [12, 13]  # motor 0 → GPIO 12, motor 1 → GPIO 13
+MOTOR_SPEED: float = 1.0          # default throttle when running manually (0.0 – 1.0)
+# Modbus coil map for FMS PLC → motor commands (PLC writes, Pi reads):
+#   coil MOTOR_COIL_BASE + 0: enable  (True = run both motors)
+#   coil MOTOR_COIL_BASE + 1: forward (True = forward, False = reverse — both motors)
+MOTOR_COIL_BASE: int = 0
 
 # --- sACN ---
 SACN_UNIVERSE: int = 1

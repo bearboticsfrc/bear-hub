@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 import uvicorn
 
 from src.config import (
+    MOTOR_SPEED,
     NT_SERVER_ADDRESS,
     STATE_FILE,
     WEB_HOST,
@@ -48,6 +49,9 @@ class AppState:
     nt_server_address: str = NT_SERVER_ADDRESS
     sacn_active: bool = False
     seconds_until_inactive: float = -1.0
+    motors_running: bool = False
+    motor_speed: float = MOTOR_SPEED
+    led_color: tuple[int, int, int] = (0, 0, 0)
 
 
 class App:
@@ -110,6 +114,7 @@ class App:
         asyncio.create_task(self._process_leds())
         asyncio.create_task(self._status_poll())
         asyncio.create_task(self._practice_led_task())
+        asyncio.create_task(self._motor_poll())
 
         log.info("BearHub (%s) running — web at http://%s:%d", self.hub.name, WEB_HOST, WEB_PORT)
 
@@ -224,6 +229,10 @@ class App:
                 continue
             self._leds.set_all(color)
             self._leds.show()
+            new_color = (color.r, color.g, color.b)
+            if new_color != self.state.led_color:
+                self.state.led_color = new_color
+                await self._broadcast_state()
 
     def _update_score_leds(self, count: int) -> None:
         from src.config import THRESHOLD_ENERGIZED, THRESHOLD_SUPERCHARGED
@@ -236,6 +245,7 @@ class App:
         else:
             r, g, b = self.hub.led_idle_color
             color = Color(r, g, b)
+        self.state.led_color = (color.r, color.g, color.b)
         self._leds.set_all(color)
         self._leds.show()
 
@@ -243,11 +253,16 @@ class App:
         """Flash LEDs for 1 second on each ball scored in demo mode."""
         from src.leds import Color
         try:
+            self.state.led_color = self.hub.led_idle_color
             self._leds.set_all(Color(*self.hub.led_idle_color))
             self._leds.show()
+            await self._broadcast_state()
             await asyncio.sleep(1.0)
+            self.state.led_color = (0, 0, 0)
             self._leds.clear()
+            await self._broadcast_state()
         except asyncio.CancelledError:
+            self.state.led_color = (0, 0, 0)
             self._leds.clear()
             raise
 
@@ -303,14 +318,22 @@ class App:
                 should_blink = fms_period == "teleop" and 0 <= seconds_left <= 3
                 if should_blink:
                     blink_on = not blink_on
-                    self._leds.set_all(hub_color if blink_on else Color(0, 0, 0))
+                    active_color = hub_color if blink_on else Color(0, 0, 0)
+                    self._leds.set_all(active_color)
+                    new_led_color = (active_color.r, active_color.g, active_color.b)
                 else:
                     blink_on = False
                     self._leds.set_all(hub_color)
+                    new_led_color = (hub_color.r, hub_color.g, hub_color.b)
                 self._leds.show()
             else:
                 blink_on = False
                 self._leds.clear()
+                new_led_color = (0, 0, 0)
+
+            if new_led_color != self.state.led_color:
+                self.state.led_color = new_led_color
+                await self._broadcast_state()
 
             await asyncio.sleep(0.25)
 
@@ -385,12 +408,47 @@ class App:
                 self.state.seconds_until_inactive = new_seconds
                 await self._broadcast_state()
 
+    # ── Motor polling ────────────────────────────────────────────────────
+
+    async def _motor_poll(self) -> None:
+        """Drive motors at 20 Hz from Modbus coils (fms) or NT (robot modes).
+
+        Coil map (MOTOR_COIL_BASE + offset) — both motors share one coil pair:
+          offset 0: enable  (True = run both motors)
+          offset 1: forward (True = forward, False = reverse)
+        NT topics: BearHub/motor{N}Throttle (double, -1.0 to 1.0)
+        """
+        from src.config import MOTOR_COIL_BASE, MOTOR_PINS
+
+        num_motors = len(MOTOR_PINS)
+        while not self._shutdown_event.is_set():
+            await asyncio.sleep(0.05)  # 20 Hz
+
+            throttles = [0.0] * num_motors
+
+            if self.state.mode == "fms":
+                enable = self._modbus.get_coil(MOTOR_COIL_BASE)
+                forward = self._modbus.get_coil(MOTOR_COIL_BASE + 1)
+                shared_throttle = (1.0 if forward else -1.0) if enable else 0.0
+                throttles = [shared_throttle] * num_motors
+
+            elif self.state.mode in ("robot_teleop", "robot_practice"):
+                for i in range(num_motors):
+                    throttles[i] = self._nt.get_motor_throttle(i)
+
+            elif self.state.motors_running:
+                throttles = [self.state.motor_speed] * num_motors
+
+            for i, throttle in enumerate(throttles):
+                self._motors.set_throttle(i, throttle)
+
     # ── Counts reset ─────────────────────────────────────────────────────
 
     async def reset_counts(self) -> None:
         self.state.active_count = 0
         self.state.auto_count = 0
         self.state.inactive_count = 0
+        self.state.led_color = (0, 0, 0)
         if self.state.mode == "fms":
             self._modbus.set_ball_count(self.hub.modbus_ball_count_register, 0)
         elif self.state.mode in ("robot_teleop", "robot_practice"):
@@ -422,6 +480,22 @@ class App:
         await self._broadcast_state()
         return self.state.simulator_enabled
 
+    # ── Motors ───────────────────────────────────────────────────────────
+
+    async def toggle_motors(self) -> bool:
+        """Toggle motors on/off manually. Returns the new state."""
+        self.state.motors_running = not self.state.motors_running
+        log.info("Motors %s", "started" if self.state.motors_running else "stopped")
+        await self._broadcast_state()
+        return self.state.motors_running
+
+    async def set_motor_speed(self, speed: float) -> None:
+        """Set manual motor speed (0.0 – 1.0) and persist it."""
+        self.state.motor_speed = max(0.0, min(1.0, speed))
+        log.info("Motor speed set to %.2f", self.state.motor_speed)
+        self._save_state()
+        await self._broadcast_state()
+
     # ── State broadcast ──────────────────────────────────────────────────
 
     async def _broadcast_state(self) -> None:
@@ -439,6 +513,7 @@ class App:
             data = json.loads(path.read_text())
             self.state.mode = data.get("mode", "demo")
             self.state.nt_server_address = data.get("nt_server_address", NT_SERVER_ADDRESS)
+            self.state.motor_speed = float(data.get("motor_speed", MOTOR_SPEED))
         except Exception:
             log.warning("Could not load state from %s", STATE_FILE)
 
@@ -449,6 +524,7 @@ class App:
             path.write_text(json.dumps({
                 "mode": self.state.mode,
                 "nt_server_address": self.state.nt_server_address,
+                "motor_speed": self.state.motor_speed,
             }))
         except Exception:
             log.warning("Could not save state to %s", STATE_FILE)

@@ -1,10 +1,12 @@
 """NetworkTables 4 client for robot communication.
 
 Subscribed topics:
-  FMS/mode              (string)  — "auto" | "teleop" | "disabled"
-  FMSInfo/FMSControlData (int)   — bitmask; 35 = autonomous+enabled+DS attached
-  HubTracker/isActive   (boolean) — true when this hub's cycle is active
-  HubPractice/ledColor  (int[])  — [r, g, b] in robot_practice mode
+  FMS/mode                  (string)  — "auto" | "teleop" | "disabled"
+  FMSInfo/FMSControlData    (int)     — bitmask; 35 = autonomous+enabled+DS attached
+  HubTracker/isActive       (boolean) — true when this hub's cycle is active
+  HubPractice/ledColor      (int[])   — [r, g, b] in robot_practice mode
+  BearHub/motor0Throttle    (double)  — motor 0 throttle [-1.0, 1.0] (robot_teleop/practice)
+  BearHub/motor1Throttle    (double)  — motor 1 throttle [-1.0, 1.0] (robot_teleop/practice)
 
 Published topics:
   BearHub/totalCount (integer) — current active ball count
@@ -34,6 +36,7 @@ class NTClient:
         self._practice_hub_active_sub = None
         self._seconds_until_inactive_sub = None
         self._practice_color_sub = None
+        self._motor_throttle_subs: list = []
 
     def start(self, server_address: str, identity: str = NT_IDENTITY) -> None:
         import ntcore  # type: ignore[import]  # Pi/robot dependency
@@ -68,10 +71,17 @@ class NTClient:
         practice = self._inst.getTable("HubPractice")
         self._practice_color_sub = practice.getIntegerArrayTopic("ledColor").subscribe([])
 
+        from src.config import MOTOR_PINS
+        self._motor_throttle_subs = [
+            nt.getDoubleTopic(f"motor{i}Throttle").subscribe(0.0)
+            for i in range(len(MOTOR_PINS))
+        ]
+
     def stop(self) -> None:
         if self._inst is not None:
             self._inst.stopClient()
             self._inst = None
+            self._motor_throttle_subs.clear()
             log.info("NT4 client stopped")
 
     def publish_count(self, count: int) -> None:
@@ -107,6 +117,12 @@ class NTClient:
         if self._hub_active_sub is None:
             return True
         return self._hub_active_sub.get()
+
+    def get_motor_throttle(self, index: int) -> float:
+        """Return motor throttle [-1.0, 1.0] published by the robot, or 0.0."""
+        if index >= len(self._motor_throttle_subs):
+            return 0.0
+        return float(self._motor_throttle_subs[index].get())
 
     def get_practice_led_color(self) -> Color | None:
         """Return [r, g, b] color from robot in practice mode, or None."""

@@ -28,12 +28,18 @@
                 <span class="status-dot" id="sacn-dot"></span>
                 <span class="status-label">sACN</span>
             </span>
+            <span class="status-item">
+                <span class="status-dot" id="motors-dot"></span>
+                <span class="status-label">Motors</span>
+            </span>
         </div>
         <nav>
             <a href="/" class="nav-btn active">Dashboard</a>
             <a href="/admin" class="nav-btn">Admin</a>
         </nav>
     </header>
+
+    <div id="led-bar"></div>
 
     <main>
         <div class="active-display">
@@ -61,6 +67,7 @@
 
         <div class="actions">
             <button id="simulate-btn" class="action-btn simulate" style="display:none;">+ Ball</button>
+            <button id="motors-btn" class="action-btn motors-stop" style="display:none;">Stop Motors</button>
         </div>
 
         <div class="actions" id="reset-section" style="display:none;margin-top:0.75rem;">

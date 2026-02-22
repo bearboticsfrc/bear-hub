@@ -32,7 +32,7 @@ class TestBallCounter:
         counter.start(loop, queue)
 
         mock_lgpio.gpiochip_open.assert_called_once_with(0)
-        assert mock_lgpio.gpio_claim_input.call_count == 2
+        assert mock_lgpio.gpio_claim_alert.call_count == 2
         assert mock_lgpio.callback.call_count == 2
         loop.close()
 
@@ -52,6 +52,8 @@ class TestBallCounter:
     async def test_falling_edge_posts_to_queue(self, mock_lgpio):
         from src.ball_counter import BallCounter
 
+        mock_lgpio.gpio_read.return_value = 0  # LOW = beam broken
+
         counter = BallCounter(pins=[23, 24, 25, 16])
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[int] = asyncio.Queue()
@@ -69,6 +71,8 @@ class TestBallCounter:
     async def test_debounce_suppresses_rapid_edges(self, mock_lgpio):
         from src.ball_counter import BallCounter
         from src.config import BALL_DEBOUNCE_MS
+
+        mock_lgpio.gpio_read.return_value = 0  # LOW = beam broken
 
         counter = BallCounter(pins=[23])
         loop = asyncio.get_running_loop()

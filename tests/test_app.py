@@ -10,12 +10,28 @@ import pytest
 from src.config import RED_HUB
 
 
+async def _force_cancel(task: asyncio.Task) -> None:
+    """Cancel a task, retrying until done.
+
+    asyncio.wait_for in Python 3.11+ can absorb a CancelledError when the inner
+    future resolves simultaneously with the cancel (e.g. queue had items ready).
+    Retrying ensures the cancel is eventually delivered on an empty-queue iteration.
+    """
+    while not task.done():
+        task.cancel()
+        await asyncio.sleep(0)
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
 def _make_app(hub=RED_HUB):
     """Build an App with all null/mock dependencies."""
     from src.app import App
     from src.ball_counter import NullBallCounter
     from src.leds import NullLedStrip
-    from src.motors import MockMotors
+    from src.motors import NullMotors
 
     modbus = MagicMock()
     modbus.start = AsyncMock()
@@ -44,7 +60,7 @@ def _make_app(hub=RED_HUB):
         hub=hub,
         leds=NullLedStrip(),
         ball_counter=NullBallCounter(),
-        motors=MockMotors(),
+        motors=NullMotors(),
         modbus=modbus,
         nt_client=nt,
         sacn_receiver=sacn,
@@ -71,11 +87,7 @@ async def test_demo_mode_all_balls_go_to_active():
         for _ in range(3):
             task = asyncio.create_task(app._process_balls())
             await asyncio.sleep(0)
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+            await _force_cancel(task)
 
     assert app.state.active_count == 3
     assert app.state.auto_count == 0
@@ -93,11 +105,7 @@ async def test_auto_period_increments_both_active_and_auto():
     with patch("src.app.App._broadcast_state", new_callable=AsyncMock):
         task = asyncio.create_task(app._process_balls())
         await asyncio.sleep(0)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        await _force_cancel(task)
 
     assert app.state.active_count == 1
     assert app.state.auto_count == 1
@@ -116,11 +124,7 @@ async def test_teleop_hub_active_increments_active_only():
     with patch("src.app.App._broadcast_state", new_callable=AsyncMock):
         task = asyncio.create_task(app._process_balls())
         await asyncio.sleep(0)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        await _force_cancel(task)
 
     assert app.state.active_count == 1
     assert app.state.auto_count == 0
@@ -139,11 +143,7 @@ async def test_teleop_hub_inactive_increments_inactive_only():
     with patch("src.app.App._broadcast_state", new_callable=AsyncMock):
         task = asyncio.create_task(app._process_balls())
         await asyncio.sleep(0)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        await _force_cancel(task)
 
     assert app.state.active_count == 0
     assert app.state.auto_count == 0
@@ -212,11 +212,7 @@ async def test_fms_mode_writes_to_modbus():
     with patch("src.app.App._broadcast_state", new_callable=AsyncMock):
         task = asyncio.create_task(app._process_balls())
         await asyncio.sleep(0)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        await _force_cancel(task)
 
     app._modbus.set_ball_count.assert_called_with(RED_HUB.modbus_ball_count_register, 1)
 
@@ -233,11 +229,7 @@ async def test_robot_teleop_mode_publishes_to_nt():
     with patch("src.app.App._broadcast_state", new_callable=AsyncMock):
         task = asyncio.create_task(app._process_balls())
         await asyncio.sleep(0)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        await _force_cancel(task)
 
     app._nt.publish_count.assert_called_with(1)
 
@@ -254,11 +246,7 @@ async def test_fms_mode_modbus_total_includes_inactive():
     with patch("src.app.App._broadcast_state", new_callable=AsyncMock):
         task = asyncio.create_task(app._process_balls())
         await asyncio.sleep(0)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        await _force_cancel(task)
 
     # active=0, inactive=1 → Modbus should receive 1, not 0
     assert app.state.inactive_count == 1
@@ -275,11 +263,7 @@ async def _process_one_ball(app):
     with patch("src.app.App._broadcast_state", new_callable=AsyncMock):
         task = asyncio.create_task(app._process_balls())
         await asyncio.sleep(0)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        await _force_cancel(task)
 
 
 @pytest.mark.asyncio
@@ -370,3 +354,108 @@ async def test_practice_hub_grace_period_holds_hub_active():
             pass
 
     assert app.state.hub_is_active is True
+
+
+# ── Motor polling (FMS coil control) ─────────────────────────────────────────
+
+
+async def _run_motor_poll_once(app) -> None:
+    """Let _motor_poll execute one full iteration then cancel it.
+
+    _motor_poll starts with asyncio.sleep(0.05); waiting 60 ms guarantees the
+    first logic pass runs before the task is cancelled.  asyncio.sleep is
+    properly cancellable so a single task.cancel() is sufficient here.
+    """
+    task = asyncio.create_task(app._motor_poll())
+    await asyncio.sleep(0.06)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_fms_motor_enable_forward_sets_full_forward_throttle():
+    """Coil enable=True, forward=True → throttle +1.0 on both motors."""
+    app = _make_app()
+    app.state.mode = "fms"
+    mock_motors = MagicMock()
+    app._motors = mock_motors
+    # shared coil pair: enable=True, forward=True
+    coils = {0: True, 1: True}
+    app._modbus.get_coil = MagicMock(side_effect=lambda addr: coils.get(addr, False))
+
+    await _run_motor_poll_once(app)
+
+    mock_motors.set_throttle.assert_any_call(0, 1.0)
+    mock_motors.set_throttle.assert_any_call(1, 1.0)
+
+
+@pytest.mark.asyncio
+async def test_fms_motor_enable_reverse_sets_full_reverse_throttle():
+    """Coil enable=True, forward=False → throttle -1.0 on both motors."""
+    app = _make_app()
+    app.state.mode = "fms"
+    mock_motors = MagicMock()
+    app._motors = mock_motors
+    # shared coil pair: enable=True, forward=False (reverse)
+    coils = {0: True, 1: False}
+    app._modbus.get_coil = MagicMock(side_effect=lambda addr: coils.get(addr, False))
+
+    await _run_motor_poll_once(app)
+
+    mock_motors.set_throttle.assert_any_call(0, -1.0)
+    mock_motors.set_throttle.assert_any_call(1, -1.0)
+
+
+@pytest.mark.asyncio
+async def test_fms_motor_disabled_coil_idles_motor():
+    """Coil enable=False → throttle 0.0 on both motors regardless of forward coil."""
+    app = _make_app()
+    app.state.mode = "fms"
+    mock_motors = MagicMock()
+    app._motors = mock_motors
+    app._modbus.get_coil = MagicMock(return_value=False)  # all coils off
+
+    await _run_motor_poll_once(app)
+
+    mock_motors.set_throttle.assert_any_call(0, 0.0)
+    mock_motors.set_throttle.assert_any_call(1, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_fms_both_motors_share_single_coil_pair():
+    """Both motors receive the same throttle from the shared coil pair (coils 0 and 1)."""
+    app = _make_app()
+    app.state.mode = "fms"
+    mock_motors = MagicMock()
+    app._motors = mock_motors
+    # enable=True, forward=True → both motors +1.0
+    coils = {0: True, 1: True}
+    app._modbus.get_coil = MagicMock(side_effect=lambda addr: coils.get(addr, False))
+
+    await _run_motor_poll_once(app)
+
+    # Only coils 0 and 1 should be read — not 2 or 3
+    read_addrs = [call.args[0] for call in app._modbus.get_coil.call_args_list]
+    assert set(read_addrs) == {0, 1}
+    mock_motors.set_throttle.assert_any_call(0, 1.0)
+    mock_motors.set_throttle.assert_any_call(1, 1.0)
+
+
+@pytest.mark.asyncio
+async def test_non_fms_mode_motors_idle():
+    """In demo mode the motor poll sends zero throttle (coils are ignored)."""
+    app = _make_app()
+    app.state.mode = "demo"
+    mock_motors = MagicMock()
+    app._motors = mock_motors
+    # Even if coils were set, they should not be read in demo mode
+    app._modbus.get_coil = MagicMock(return_value=True)
+
+    await _run_motor_poll_once(app)
+
+    mock_motors.set_throttle.assert_any_call(0, 0.0)
+    mock_motors.set_throttle.assert_any_call(1, 0.0)
+    app._modbus.get_coil.assert_not_called()
