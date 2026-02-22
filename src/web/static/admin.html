@@ -98,6 +98,17 @@
         </section>
 
         <section class="admin-section">
+            <h2>Motors</h2>
+            <div class="toggle-row">
+                <span class="toggle-label">Run motors at full speed</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="motors-toggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </section>
+
+        <section class="admin-section">
             <h2>Score</h2>
             <div class="score-grid">
                 <div class="score-item"><span class="score-label">Active</span><span id="adm-active">0</span></div>
@@ -203,6 +214,12 @@
         document.getElementById('simulator-toggle').addEventListener('change', async () => {
             try {
                 await fetch('/api/simulate/toggle', {method: 'POST'});
+            } catch(e) { console.error(e); }
+        });
+
+        document.getElementById('motors-toggle').addEventListener('change', async () => {
+            try {
+                await fetch('/api/motors/toggle', {method: 'POST'});
             } catch(e) { console.error(e); }
         });
 

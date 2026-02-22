@@ -268,6 +268,11 @@ main {
 .action-btn.simulate { background: var(--accent); color: #fff; font-size: 1.1rem; padding: 0.7rem 2.5rem; }
 .action-btn.simulate:hover { background: #5599ff; }
 
+.action-btn.motors-start { background: #22AA55; color: #fff; }
+.action-btn.motors-start:hover { background: #33BB66; }
+.action-btn.motors-stop  { background: var(--disconnected); color: #fff; }
+.action-btn.motors-stop:hover  { background: #dd4444; }
+
 /* ── Toggle switch ── */
 .toggle-row {
     display: flex;

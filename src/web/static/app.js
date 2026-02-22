@@ -299,6 +299,20 @@ class BearHubApp {
         const simToggle = document.getElementById('simulator-toggle');
         if (simToggle) simToggle.checked = !!data.simulator_enabled;
 
+        // Motors button (dashboard) — always visible; label reflects state
+        const motorsBtn = document.getElementById('motors-btn');
+        if (motorsBtn) {
+            const running = !!data.motors_running;
+            motorsBtn.style.display = '';
+            motorsBtn.textContent = running ? 'Stop Motors' : 'Start Motors';
+            motorsBtn.classList.toggle('motors-stop', running);
+            motorsBtn.classList.toggle('motors-start', !running);
+        }
+
+        // Motors toggle (admin page)
+        const motorsToggle = document.getElementById('motors-toggle');
+        if (motorsToggle) motorsToggle.checked = !!data.motors_running;
+
         // Period badge (both pages) — visible only in robot modes
         const periodBadge = document.getElementById('period-badge');
         if (periodBadge) {
@@ -465,9 +479,20 @@ class BearHubApp {
         }
     }
 
-    // ── Reset button ──────────────────────────────────────────────────────
+    // ── Reset / Motors buttons ────────────────────────────────────────────
 
     bindResetButton() {
+        const motorsBtn = document.getElementById('motors-btn');
+        if (motorsBtn) {
+            motorsBtn.addEventListener('click', async () => {
+                try {
+                    await fetch('/api/motors/toggle', { method: 'POST' });
+                } catch (e) {
+                    this.showToast('Motor toggle failed', 'error');
+                }
+            });
+        }
+
         const btn = document.getElementById('reset-btn');
         if (btn) {
             btn.addEventListener('click', async () => {

@@ -60,6 +60,7 @@ async def get_status() -> dict:
         "sacn_active": s.sacn_active,
         "fms_period": s.fms_period,
         "seconds_until_inactive": s.seconds_until_inactive,
+        "motors_running": s.motors_running,
     }
 
 
@@ -102,6 +103,14 @@ async def simulate_toggle() -> dict:
         return {"success": False}
     enabled = await app_instance.toggle_simulator()
     return {"success": True, "simulator_enabled": enabled}
+
+
+@app.post("/api/motors/toggle")
+async def motors_toggle() -> dict:
+    if app_instance is None:
+        return {"success": False}
+    running = await app_instance.toggle_motors()
+    return {"success": True, "motors_running": running}
 
 
 @app.post("/api/simulate/ball")
@@ -195,5 +204,6 @@ def _build_state_message(a: App) -> dict:
             "sacn_active": s.sacn_active,
             "fms_period": s.fms_period,
             "seconds_until_inactive": s.seconds_until_inactive,
+            "motors_running": s.motors_running,
         },
     }
