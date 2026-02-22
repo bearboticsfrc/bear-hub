@@ -10,12 +10,28 @@ import pytest
 from src.config import RED_HUB
 
 
+async def _force_cancel(task: asyncio.Task) -> None:
+    """Cancel a task, retrying until done.
+
+    asyncio.wait_for in Python 3.11+ can absorb a CancelledError when the inner
+    future resolves simultaneously with the cancel (e.g. queue had items ready).
+    Retrying ensures the cancel is eventually delivered on an empty-queue iteration.
+    """
+    while not task.done():
+        task.cancel()
+        await asyncio.sleep(0)
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
 def _make_app(hub=RED_HUB):
     """Build an App with all null/mock dependencies."""
     from src.app import App
     from src.ball_counter import NullBallCounter
     from src.leds import NullLedStrip
-    from src.motors import MockMotors
+    from src.motors import NullMotors
 
     modbus = MagicMock()
     modbus.start = AsyncMock()
@@ -44,7 +60,7 @@ def _make_app(hub=RED_HUB):
         hub=hub,
         leds=NullLedStrip(),
         ball_counter=NullBallCounter(),
-        motors=MockMotors(),
+        motors=NullMotors(),
         modbus=modbus,
         nt_client=nt,
         sacn_receiver=sacn,
@@ -71,11 +87,7 @@ async def test_demo_mode_all_balls_go_to_active():
         for _ in range(3):
             task = asyncio.create_task(app._process_balls())
             await asyncio.sleep(0)
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+            await _force_cancel(task)
 
     assert app.state.active_count == 3
     assert app.state.auto_count == 0
@@ -93,11 +105,7 @@ async def test_auto_period_increments_both_active_and_auto():
     with patch("src.app.App._broadcast_state", new_callable=AsyncMock):
         task = asyncio.create_task(app._process_balls())
         await asyncio.sleep(0)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        await _force_cancel(task)
 
     assert app.state.active_count == 1
     assert app.state.auto_count == 1
@@ -116,11 +124,7 @@ async def test_teleop_hub_active_increments_active_only():
     with patch("src.app.App._broadcast_state", new_callable=AsyncMock):
         task = asyncio.create_task(app._process_balls())
         await asyncio.sleep(0)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        await _force_cancel(task)
 
     assert app.state.active_count == 1
     assert app.state.auto_count == 0
@@ -139,11 +143,7 @@ async def test_teleop_hub_inactive_increments_inactive_only():
     with patch("src.app.App._broadcast_state", new_callable=AsyncMock):
         task = asyncio.create_task(app._process_balls())
         await asyncio.sleep(0)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        await _force_cancel(task)
 
     assert app.state.active_count == 0
     assert app.state.auto_count == 0
@@ -212,11 +212,7 @@ async def test_fms_mode_writes_to_modbus():
     with patch("src.app.App._broadcast_state", new_callable=AsyncMock):
         task = asyncio.create_task(app._process_balls())
         await asyncio.sleep(0)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        await _force_cancel(task)
 
     app._modbus.set_ball_count.assert_called_with(RED_HUB.modbus_ball_count_register, 1)
 
@@ -233,11 +229,7 @@ async def test_robot_teleop_mode_publishes_to_nt():
     with patch("src.app.App._broadcast_state", new_callable=AsyncMock):
         task = asyncio.create_task(app._process_balls())
         await asyncio.sleep(0)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        await _force_cancel(task)
 
     app._nt.publish_count.assert_called_with(1)
 
@@ -254,11 +246,7 @@ async def test_fms_mode_modbus_total_includes_inactive():
     with patch("src.app.App._broadcast_state", new_callable=AsyncMock):
         task = asyncio.create_task(app._process_balls())
         await asyncio.sleep(0)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        await _force_cancel(task)
 
     # active=0, inactive=1 → Modbus should receive 1, not 0
     assert app.state.inactive_count == 1
@@ -275,11 +263,7 @@ async def _process_one_ball(app):
     with patch("src.app.App._broadcast_state", new_callable=AsyncMock):
         task = asyncio.create_task(app._process_balls())
         await asyncio.sleep(0)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        await _force_cancel(task)
 
 
 @pytest.mark.asyncio
