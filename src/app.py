@@ -391,9 +391,9 @@ class App:
     async def _motor_poll(self) -> None:
         """Drive motors at 20 Hz from Modbus coils (fms) or NT (robot modes).
 
-        Coil map (MOTOR_COIL_BASE + offset):
-          offset 0: motor N enable  (True = run)
-          offset 1: motor N forward (True = forward, False = reverse)
+        Coil map (MOTOR_COIL_BASE + offset) — both motors share one coil pair:
+          offset 0: enable  (True = run both motors)
+          offset 1: forward (True = forward, False = reverse)
         NT topics: BearHub/motor{N}Throttle (double, -1.0 to 1.0)
         """
         from src.config import MOTOR_COIL_BASE, MOTOR_PINS
@@ -405,10 +405,10 @@ class App:
             throttles = [0.0] * num_motors
 
             if self.state.mode == "fms":
-                for i in range(num_motors):
-                    enable = self._modbus.get_coil(MOTOR_COIL_BASE + i * 2)
-                    forward = self._modbus.get_coil(MOTOR_COIL_BASE + i * 2 + 1)
-                    throttles[i] = (1.0 if forward else -1.0) if enable else 0.0
+                enable = self._modbus.get_coil(MOTOR_COIL_BASE)
+                forward = self._modbus.get_coil(MOTOR_COIL_BASE + 1)
+                shared_throttle = (1.0 if forward else -1.0) if enable else 0.0
+                throttles = [shared_throttle] * num_motors
 
             elif self.state.mode in ("robot_teleop", "robot_practice"):
                 for i in range(num_motors):
