@@ -110,6 +110,7 @@ class App:
         asyncio.create_task(self._process_leds())
         asyncio.create_task(self._status_poll())
         asyncio.create_task(self._practice_led_task())
+        asyncio.create_task(self._motor_poll())
 
         log.info("BearHub (%s) running — web at http://%s:%d", self.hub.name, WEB_HOST, WEB_PORT)
 
@@ -384,6 +385,37 @@ class App:
             if int(new_seconds) != int(self.state.seconds_until_inactive):
                 self.state.seconds_until_inactive = new_seconds
                 await self._broadcast_state()
+
+    # ── Motor polling ────────────────────────────────────────────────────
+
+    async def _motor_poll(self) -> None:
+        """Drive motors at 20 Hz from Modbus coils (fms) or NT (robot modes).
+
+        Coil map (MOTOR_COIL_BASE + offset):
+          offset 0: motor N enable  (True = run)
+          offset 1: motor N forward (True = forward, False = reverse)
+        NT topics: BearHub/motor{N}Throttle (double, -1.0 to 1.0)
+        """
+        from src.config import MOTOR_COIL_BASE, MOTOR_PINS
+
+        num_motors = len(MOTOR_PINS)
+        while not self._shutdown_event.is_set():
+            await asyncio.sleep(0.05)  # 20 Hz
+
+            throttles = [0.0] * num_motors
+
+            if self.state.mode == "fms":
+                for i in range(num_motors):
+                    enable = self._modbus.get_coil(MOTOR_COIL_BASE + i * 2)
+                    forward = self._modbus.get_coil(MOTOR_COIL_BASE + i * 2 + 1)
+                    throttles[i] = (1.0 if forward else -1.0) if enable else 0.0
+
+            elif self.state.mode in ("robot_teleop", "robot_practice"):
+                for i in range(num_motors):
+                    throttles[i] = self._nt.get_motor_throttle(i)
+
+            for i, throttle in enumerate(throttles):
+                self._motors.set_throttle(i, throttle)
 
     # ── Counts reset ─────────────────────────────────────────────────────
 
