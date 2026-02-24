@@ -91,11 +91,11 @@ The app runs in one of four modes, selected via the admin web page and persisted
 | Mode | Ball Count | LEDs | Motors | Modbus | NT |
 |---|---|---|---|---|---|
 | `fms` | written to Modbus holding register (FMS PLC reads it) | driven by FMS via sACN | read from Modbus coils (FMS PLC writes them) | active | inactive |
-| `adhoc` | web dashboard only | local scoring animation | idle | inactive | inactive |
+| `demo` | web dashboard only | local scoring animation | idle | inactive | inactive |
 | `robot_teleop` | web dashboard + NT | local scoring animation | NT-controlled | inactive | active |
 | `robot_practice` | web dashboard + NT | NT-driven color scheme | NT-controlled | inactive | active |
 
-**LED source by mode:** `leds.py` accepts commands from different sources depending on mode. In `fms` mode the source is `sacn_receiver.py`; in `adhoc`/`robot_teleop` it is the local scoring logic in `app.py`; in `robot_practice` it is NT values published by the robot. The LED subsystem itself is source-agnostic — it only consumes a command queue.
+**LED source by mode:** `leds.py` accepts commands from different sources depending on mode. In `fms` mode the source is `sacn_receiver.py`; in `demo`/`robot_teleop` it is the local scoring logic in `app.py`; in `robot_practice` it is NT values published by the robot. The LED subsystem itself is source-agnostic — it only consumes a command queue.
 
 Mode changes are applied immediately without restart. The current mode is stored in `app.py` state and broadcast to all WebSocket clients on change. It is persisted to a local JSON file so it survives restarts.
 
@@ -133,7 +133,7 @@ else:
 
 `active_count` is the primary score — it accumulates balls from both the autonomous period and active teleop cycles. `autonomous_count` and `inactive_count` are supplementary breakdowns displayed smaller on the dashboard.
 
-In `adhoc` mode (no NT connection) there is no period or active/inactive signal, so all balls increment `active_count` only.
+In `demo` mode (no NT connection) there is no period or active/inactive signal, so all balls increment `active_count` only.
 
 #### NetworkTables Topics
 
@@ -164,7 +164,7 @@ The web server serves two distinct pages:
 │   AUTO COUNT      │   INACTIVE COUNT    │  ← smaller cards, ~2.5rem font
 │       15          │         8           │
 ├───────────────────┴─────────────────────┤
-│          [ Reset Count ]                │  ← only visible in adhoc mode
+│          [ Reset Count ]                │  ← only visible in demo mode
 └─────────────────────────────────────────┘
 ```
 
@@ -177,7 +177,7 @@ The web server serves two distinct pages:
 - Connected status dot: `#44FF44`
 - Disconnected status dot: `#CC3333`
 - Reset button: `#CC3333` (danger red)
-- Mode badge: filled pill, color varies by mode (blue=fms, gray=adhoc, green=robot_teleop, yellow=robot_practice)
+- Mode badge: filled pill, color varies by mode (blue=fms, gray=demo, green=robot_teleop, yellow=robot_practice)
 
 **Status indicators** (header, right side):
 - `● FMS` — green if Modbus connected, red if not
@@ -196,7 +196,7 @@ The web server serves two distinct pages:
 
 Animations trigger **once when the threshold is first crossed**, not on every subsequent ball. The active count number stays in the threshold color for the remainder of the match. Threshold colors and animations are inspired by the 6328 reference (`../6328/RobotCode2026Public/hubcounter/hub_counter/web/static/`).
 
-**Reset button:** Rendered in the DOM always but shown only when mode is `adhoc`. Resets all three counts to zero via `POST /api/counts/reset`.
+**Reset button:** Rendered in the DOM always but shown only when mode is `demo`. Resets all three counts to zero via `POST /api/counts/reset`.
 
 **Real-time updates:** WebSocket at `/api/ws` pushes JSON on every count change and mode/connection change. 30-second client-side keepalive ping. Auto-reconnects on disconnect.
 

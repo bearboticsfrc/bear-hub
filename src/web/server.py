@@ -42,6 +42,12 @@ async def admin() -> HTMLResponse:
     return HTMLResponse(content=html)
 
 
+@app.get("/debug", response_class=HTMLResponse)
+async def debug() -> HTMLResponse:
+    html = (STATIC_DIR / "debug.html").read_text()
+    return HTMLResponse(content=html)
+
+
 @app.get("/api/status")
 async def get_status() -> dict:
     if app_instance is None:

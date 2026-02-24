@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BearHub Debug — Team 4068</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <header>
+        <img src="/static/4068Gear.jpeg" alt="Team 4068" class="team-logo">
+        <div class="header-title">
+            <h1>BearHub</h1>
+            <span id="hub-name-badge" class="hub-badge">RedHub</span>
+        </div>
+        <div class="header-status">
+            <span id="mode-badge" class="mode-badge mode-demo">demo</span>
+        </div>
+        <nav>
+            <a href="/" class="nav-btn">Dashboard</a>
+            <a href="/admin" class="nav-btn">Admin</a>
+            <a href="/debug" class="nav-btn active">Debug</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="active-display" style="padding: 1.5rem 0 0.5rem;">
+            <div class="active-label">CHANNEL ACTIVITY</div>
+        </div>
+
+        <div class="channel-grid">
+            <div class="channel-card" id="ch0">
+                <div class="channel-indicator"></div>
+                <div class="channel-label">Channel 0</div>
+                <div class="channel-count" id="ch0-count">0</div>
+                <div class="channel-last-seen" id="ch0-last"></div>
+            </div>
+            <div class="channel-card" id="ch1">
+                <div class="channel-indicator"></div>
+                <div class="channel-label">Channel 1</div>
+                <div class="channel-count" id="ch1-count">0</div>
+                <div class="channel-last-seen" id="ch1-last"></div>
+            </div>
+            <div class="channel-card" id="ch2">
+                <div class="channel-indicator"></div>
+                <div class="channel-label">Channel 2</div>
+                <div class="channel-count" id="ch2-count">0</div>
+                <div class="channel-last-seen" id="ch2-last"></div>
+            </div>
+            <div class="channel-card" id="ch3">
+                <div class="channel-indicator"></div>
+                <div class="channel-label">Channel 3</div>
+                <div class="channel-count" id="ch3-count">0</div>
+                <div class="channel-last-seen" id="ch3-last"></div>
+            </div>
+        </div>
+
+        <div class="debug-totals">
+            <div class="debug-total-item">
+                <div class="debug-total-label">Total (all channels)</div>
+                <div class="debug-total-value" id="debug-total">0</div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="action-btn danger" id="debug-reset-btn">Reset Counts</button>
+        </div>
+    </main>
+
+    <script>
+    (() => {
+        const NUM_CHANNELS = 4;
+        const ACTIVE_MS = 300; // how long the indicator stays lit
+
+        const counts = new Array(NUM_CHANNELS).fill(0);
+        const timers = new Array(NUM_CHANNELS).fill(null);
+
+        function flash(ch) {
+            const card = document.getElementById(`ch${ch}`);
+            if (!card) return;
+
+            counts[ch]++;
+            document.getElementById(`ch${ch}-count`).textContent = counts[ch];
+            document.getElementById(`ch${ch}-last`).textContent = new Date().toLocaleTimeString();
+            document.getElementById('debug-total').textContent =
+                counts.reduce((a, b) => a + b, 0);
+
+            card.classList.add('active');
+            if (timers[ch]) clearTimeout(timers[ch]);
+            timers[ch] = setTimeout(() => card.classList.remove('active'), ACTIVE_MS);
+        }
+
+        function updateHeader(data) {
+            const hubBadge = document.getElementById('hub-name-badge');
+            if (hubBadge && data.hub_name) hubBadge.textContent = data.hub_name;
+
+            const modeBadge = document.getElementById('mode-badge');
+            if (modeBadge && data.mode) {
+                modeBadge.textContent = data.mode;
+                modeBadge.className = `mode-badge mode-${data.mode.replace('_', '-')}`;
+            }
+        }
+
+        function connect() {
+            const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+            const ws = new WebSocket(`${proto}://${location.host}/api/ws`);
+
+            ws.onmessage = (evt) => {
+                let msg;
+                try { msg = JSON.parse(evt.data); } catch { return; }
+
+                if (msg.type === 'ball_channel') {
+                    const ch = msg.channel;
+                    if (ch >= 0 && ch < NUM_CHANNELS) flash(ch);
+                } else if (msg.type === 'state' && msg.data) {
+                    updateHeader(msg.data);
+                }
+            };
+
+            ws.onclose = () => setTimeout(connect, 3000);
+
+            const keepalive = setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN) ws.send('ping');
+            }, 30000);
+            ws.onclose = () => { clearInterval(keepalive); setTimeout(connect, 3000); };
+        }
+
+        document.getElementById('debug-reset-btn').addEventListener('click', () => {
+            for (let i = 0; i < NUM_CHANNELS; i++) {
+                counts[i] = 0;
+                document.getElementById(`ch${i}-count`).textContent = '0';
+                document.getElementById(`ch${i}-last`).textContent = '';
+                const card = document.getElementById(`ch${i}`);
+                if (card) card.classList.remove('active');
+            }
+            document.getElementById('debug-total').textContent = '0';
+        });
+
+        connect();
+    })();
+    </script>
+</body>
+</html>

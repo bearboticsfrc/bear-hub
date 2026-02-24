@@ -488,6 +488,96 @@ body.shake-intense { animation: shake 1s ease-in-out 2; }
 .toast.success { border-color: var(--connected); }
 .toast.error   { border-color: var(--disconnected); }
 
+/* ── Debug page ── */
+.channel-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin: 2rem auto;
+    max-width: 860px;
+}
+
+.channel-card {
+    background: var(--card-bg);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem 1rem;
+    text-align: center;
+    transition: border-color 0.1s;
+}
+
+.channel-card.active {
+    border-color: var(--connected);
+}
+
+.channel-indicator {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: #1a2a3a;
+    margin: 0 auto 1rem;
+    border: 3px solid #1E3050;
+    transition: background 0.05s, border-color 0.05s, box-shadow 0.05s;
+}
+
+.channel-card.active .channel-indicator {
+    background: var(--connected);
+    border-color: var(--connected);
+    box-shadow: 0 0 24px var(--connected);
+}
+
+.channel-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.5rem;
+}
+
+.channel-count {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: 0.5rem;
+}
+
+.channel-last-seen {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    min-height: 1em;
+}
+
+.debug-totals {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin: 0 auto 2rem;
+    max-width: 860px;
+    flex-wrap: wrap;
+}
+
+.debug-total-item {
+    text-align: center;
+}
+
+.debug-total-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.debug-total-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+@media (max-width: 600px) {
+    .channel-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 /* ── Responsive ── */
 @media (max-width: 540px) {
     .active-count { font-size: 8rem; }

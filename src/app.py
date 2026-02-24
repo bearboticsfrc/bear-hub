@@ -182,9 +182,13 @@ class App:
     async def _process_balls(self) -> None:
         while not self._shutdown_event.is_set():
             try:
-                _channel = await asyncio.wait_for(self._ball_queue.get(), timeout=1.0)
+                channel = await asyncio.wait_for(self._ball_queue.get(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
+
+            # Broadcast raw channel event for debug page
+            from src.web.server import broadcast as _broadcast
+            await _broadcast({"type": "ball_channel", "channel": channel})
 
             mode = self.state.mode
             if mode == "demo":
