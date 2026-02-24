@@ -99,6 +99,14 @@ async def set_nt_address(body: dict) -> dict:
     return {"success": True, "address": address}
 
 
+@app.post("/api/motors/toggle")
+async def motors_toggle() -> dict:
+    if app_instance is None:
+        return {"success": False}
+    running = await app_instance.toggle_motors()
+    return {"success": True, "motors_running": running}
+
+
 @app.post("/api/simulate/toggle")
 async def simulate_toggle() -> dict:
     if app_instance is None:

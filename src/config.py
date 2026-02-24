@@ -7,7 +7,6 @@ ENABLE_LEDS: bool = True
 
 # --- Ball counter ---
 BALL_SENSOR_PINS: list[int] = [23, 24, 25, 16]
-BALL_DEBOUNCE_MS: int = 50
 
 # --- LED strip ---
 LED_COUNT: int = 300

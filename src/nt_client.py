@@ -59,7 +59,7 @@ class NTClient:
         self._hub_active_sub = hub.getBooleanTopic("isActive").subscribe(True)
 
         self._practice_hub_active_sub = (
-            self._inst.getBooleanTopic("/Robot/m_robotContainer/hubTraker/Hub Active")
+            self._inst.getBooleanTopic("/Robot/m_robotContainer/hubTracker/Hub Active")
             .subscribe(False)
         )
 
