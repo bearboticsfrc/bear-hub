@@ -291,7 +291,7 @@ class App:
                 await asyncio.sleep(0.25)
                 continue
 
-            hub_color = Color(*self.hub.led_idle_color)
+            hub_color = self._nt.get_practice_led_color() or Color(*self.hub.led_idle_color)
             now = time.monotonic()
             control = self._nt.get_fms_control_data()
 
