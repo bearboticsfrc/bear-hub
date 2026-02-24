@@ -93,9 +93,6 @@ class App:
 
         web_server.app_instance = self
 
-        # Start Modbus server
-        await self._modbus.start()
-
         # Apply persisted mode
         await self._apply_mode(self.state.mode, loop)
 
@@ -151,6 +148,7 @@ class App:
         old_mode = self.state.mode
         if old_mode == "fms":
             self._sacn.stop()
+            await self._modbus.stop()
             self.state.modbus_active = False
         if old_mode in ("robot_teleop", "robot_practice"):
             self._nt.stop()
@@ -163,6 +161,7 @@ class App:
 
     async def _apply_mode(self, mode: str, loop: asyncio.AbstractEventLoop) -> None:
         if mode == "fms":
+            await self._modbus.start()
             try:
                 self._sacn.start(loop, self._led_queue)
             except Exception:
@@ -174,7 +173,8 @@ class App:
                 log.warning("NT unavailable (dev machine?) — robot connection disabled")
             self.state.nt_connected = False  # updated by poll
 
-        # Ball counter always active
+        # Ball counter always active — stop first to release any previously claimed pins
+        self._ball_counter.stop()
         self._ball_counter.start(loop, self._ball_queue)
 
     # ── Ball processing ──────────────────────────────────────────────────
