@@ -39,6 +39,25 @@ class TestMotors:
         # gpio_claim_output should only be called once per pin
         assert mock_lgpio.gpio_claim_output.call_count == 1
 
+    def test_tx_pwm_not_called_again_when_duty_unchanged(self, mock_lgpio):
+        from src.motors import Motors
+
+        motors = Motors(pins=[12, 13])
+        motors.set_throttle(0, 0.5)
+        mock_lgpio.tx_pwm.reset_mock()
+        # Same throttle again — must NOT call tx_pwm (would interrupt the waveform)
+        motors.set_throttle(0, 0.5)
+        mock_lgpio.tx_pwm.assert_not_called()
+
+    def test_tx_pwm_called_when_duty_changes(self, mock_lgpio):
+        from src.motors import Motors
+
+        motors = Motors(pins=[12, 13])
+        motors.set_throttle(0, 0.5)
+        mock_lgpio.tx_pwm.reset_mock()
+        motors.set_throttle(0, 1.0)
+        mock_lgpio.tx_pwm.assert_called_once_with(99, 12, PWM_FREQUENCY, 10.0)
+
     def test_neutral_throttle_produces_duty_7_5(self, mock_lgpio):
         from src.motors import Motors
 

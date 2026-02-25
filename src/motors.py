@@ -40,6 +40,7 @@ class Motors:
         self._handle = lgpio.gpiochip_open(0)
         self._pins = pins
         self._active_pins: set[int] = set()
+        self._current_duty: dict[int, float] = {}  # last duty sent per pin
 
     def set_throttle(self, index: int, throttle: float) -> None:
         pin = self._pins[index]
@@ -49,13 +50,20 @@ class Motors:
         if pin not in self._active_pins:
             self._lgpio.gpio_claim_output(self._handle, pin)
             self._active_pins.add(pin)
-        self._lgpio.tx_pwm(self._handle, pin, PWM_FREQUENCY, duty)
+            self._lgpio.tx_pwm(self._handle, pin, PWM_FREQUENCY, duty)
+            self._current_duty[pin] = duty
+        elif self._current_duty.get(pin) != duty:
+            # Only restart PWM when duty actually changes — restarting on every
+            # poll cycle interrupts the waveform mid-period and causes ESC jitter.
+            self._lgpio.tx_pwm(self._handle, pin, PWM_FREQUENCY, duty)
+            self._current_duty[pin] = duty
 
     def stop_all(self) -> None:
         """Park all active motors at neutral (1500 µs) and release their pins."""
         for pin in self._active_pins:
             self._lgpio.tx_pwm(self._handle, pin, PWM_FREQUENCY, _DUTY_NEUTRAL)
         self._active_pins.clear()
+        self._current_duty.clear()
 
 
 class NullMotors:
