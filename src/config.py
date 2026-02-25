@@ -7,6 +7,7 @@ ENABLE_LEDS: bool = True
 
 # --- Ball counter ---
 BALL_SENSOR_PINS: list[int] = [23, 24, 25, 16]
+BALL_REARM_MS: int = 300  # minimum ms between counts on the same channel
 
 # --- LED strip ---
 LED_COUNT: int = 300

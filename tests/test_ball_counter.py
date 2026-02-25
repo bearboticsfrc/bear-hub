@@ -52,8 +52,6 @@ class TestBallCounter:
     async def test_falling_edge_posts_to_queue(self, mock_lgpio):
         from src.ball_counter import BallCounter
 
-        mock_lgpio.gpio_read.return_value = 0  # LOW = beam broken
-
         counter = BallCounter(pins=[23, 24, 25, 16])
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[int] = asyncio.Queue()
@@ -68,29 +66,34 @@ class TestBallCounter:
         assert channel == 1  # index of pin 24 in the list
 
     @pytest.mark.asyncio
-    async def test_debounce_suppresses_rapid_edges(self, mock_lgpio):
+    async def test_rearm_suppresses_rapid_edges(self, mock_lgpio):
         from src.ball_counter import BallCounter
-        from src.config import BALL_DEBOUNCE_MS
-
-        mock_lgpio.gpio_read.return_value = 0  # LOW = beam broken
+        from src.config import BALL_REARM_MS
 
         counter = BallCounter(pins=[23])
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[int] = asyncio.Queue()
         counter.start(loop, queue)
 
-        # First edge should pass
+        # First falling edge should count
         counter._on_edge(chip=0, gpio=23, level=0, tick=0)
         await asyncio.sleep(0)
         assert queue.qsize() == 1
 
-        # Second edge within debounce window should be suppressed
+        # Second falling edge (beam still broken) should be suppressed by beam_broken flag
         counter._on_edge(chip=0, gpio=23, level=0, tick=0)
         await asyncio.sleep(0)
-        assert queue.qsize() == 1  # still 1, not 2
+        assert queue.qsize() == 1  # still 1
 
-        # Edge after debounce window should pass
-        counter._last_trigger[23] = time.monotonic() - (BALL_DEBOUNCE_MS / 1000.0) - 0.001
+        # Rising edge (beam restored) then immediate falling edge within rearm window — suppressed
+        counter._on_edge(chip=0, gpio=23, level=1, tick=0)
+        counter._on_edge(chip=0, gpio=23, level=0, tick=0)
+        await asyncio.sleep(0)
+        assert queue.qsize() == 1  # still 1 — rearm window not elapsed
+
+        # Rising edge then falling edge after rearm window — should count
+        counter._on_edge(chip=0, gpio=23, level=1, tick=0)
+        counter._last_count_time[23] = time.monotonic() - (BALL_REARM_MS / 1000.0) - 0.001
         counter._on_edge(chip=0, gpio=23, level=0, tick=0)
         await asyncio.sleep(0)
         assert queue.qsize() == 2
