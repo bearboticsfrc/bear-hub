@@ -18,6 +18,10 @@ SPI_SPEED_HZ: int = 6_500_000
 # --- Motors (hardware PWM — Pi 5 supports PWM on GPIO 12, 13, 18, 19) ---
 MOTOR_PINS: list[int] = [12, 13]  # motor 0 → GPIO 12, motor 1 → GPIO 13
 MOTOR_SPEED: float = 1.0          # default throttle when running manually (0.0 – 1.0)
+# Sysfs hardware PWM — requires dtoverlay=pwm-2chan in /boot/firmware/config.txt.
+# Verify the chip number with: ls /sys/class/pwm/
+PWM_CHIP: int = 2                           # /sys/class/pwm/pwmchip2 on Pi 5
+MOTOR_PWM_CHANNELS: dict[int, int] = {12: 0, 13: 1}  # GPIO pin → sysfs PWM channel
 # Modbus coil map for FMS PLC → motor commands (PLC writes, Pi reads):
 #   coil MOTOR_COIL_BASE + 0: enable  (True = run both motors)
 #   coil MOTOR_COIL_BASE + 1: forward (True = forward, False = reverse — both motors)

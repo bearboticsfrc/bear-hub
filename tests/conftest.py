@@ -51,6 +51,29 @@ def mock_sacn():
 
 
 @pytest.fixture
+def fake_pwm(tmp_path):
+    """Simulate /sys/class/pwm/ with a pre-populated pwmchip directory.
+
+    Pre-creates the channel subdirectories (period, duty_cycle, enable) so
+    Motors can write to them without needing root or real hardware.  The
+    export/unexport files start empty; Motors writes the channel number into
+    them as it would on a real Pi.
+    """
+    from src.config import MOTOR_PWM_CHANNELS, PWM_CHIP
+
+    chip = tmp_path / f"pwmchip{PWM_CHIP}"
+    chip.mkdir()
+    (chip / "export").write_text("")
+    (chip / "unexport").write_text("")
+    for ch in MOTOR_PWM_CHANNELS.values():
+        pwm_dir = chip / f"pwm{ch}"
+        pwm_dir.mkdir()
+        for name in ("period", "duty_cycle", "enable"):
+            (pwm_dir / name).write_text("")
+    return tmp_path
+
+
+@pytest.fixture
 def mock_ntcore():
     """Patch ntcore so NTClient can be used without a real NetworkTables server."""
     inst_mock = MagicMock()
