@@ -7,7 +7,7 @@ Press Ctrl+C to exit.
 Usage:
     python tools/test_ball_sensors.py
     python tools/test_ball_sensors.py --pins 23 24 25 16   # override pins
-    python tools/test_ball_sensors.py --debounce 20        # override debounce ms
+    python tools/test_ball_sensors.py --rearm 500          # override rearm window ms
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import time
 
 # Default pins from config
 DEFAULT_PINS = [23, 24, 25, 16]
-DEFAULT_DEBOUNCE_MS = 10
+DEFAULT_REARM_MS = 300  # ignore re-triggers within this window after a count
 
 
 def main() -> None:
@@ -33,11 +33,11 @@ def main() -> None:
         help=f"GPIO pin numbers to monitor (default: {DEFAULT_PINS})",
     )
     parser.add_argument(
-        "--debounce",
+        "--rearm",
         type=int,
-        default=DEFAULT_DEBOUNCE_MS,
+        default=DEFAULT_REARM_MS,
         metavar="MS",
-        help=f"Debounce interval in milliseconds (default: {DEFAULT_DEBOUNCE_MS})",
+        help=f"Minimum ms between counts on the same channel (default: {DEFAULT_REARM_MS})",
     )
     args = parser.parse_args()
 
@@ -48,20 +48,25 @@ def main() -> None:
         sys.exit(1)
 
     pins: list[int] = args.pins
-    debounce_ms: int = args.debounce
-    last_trigger: dict[int, float] = {}
+    rearm_ms: int = args.rearm
     counts: dict[int, int] = {i: 0 for i in range(len(pins))}
+    beam_broken: dict[int, bool] = {}
+    last_count_time: dict[int, float] = {}
 
     handle = lgpio.gpiochip_open(0)
 
     def on_edge(chip: int, gpio: int, level: int, tick: int) -> None:
-        if lgpio.gpio_read(handle, gpio) != 0:
-            return  # beam intact
-        now = time.monotonic()
-        if (now - last_trigger.get(gpio, 0.0)) * 1000 < debounce_ms:
+        if level != 0:  # rising edge — beam restored, re-arm
+            beam_broken[gpio] = False
             return
-        last_trigger[gpio] = now
-
+        # falling edge — beam broken
+        if beam_broken.get(gpio, False):
+            return  # sustained low, ignore
+        now = time.monotonic()
+        if (now - last_count_time.get(gpio, 0.0)) * 1000 < rearm_ms:
+            return  # sensor pulsed again too soon (entry + exit pulse), ignore
+        beam_broken[gpio] = True
+        last_count_time[gpio] = now
         ch = pins.index(gpio) if gpio in pins else gpio
         counts[ch] += 1
         ts = time.strftime("%H:%M:%S")
@@ -69,11 +74,11 @@ def main() -> None:
 
     callbacks = []
     for pin in pins:
-        lgpio.gpio_claim_alert(handle, pin, lgpio.BOTH_EDGES)
+        lgpio.gpio_claim_alert(handle, pin, lgpio.BOTH_EDGES, lgpio.SET_PULL_UP)
         callbacks.append(lgpio.callback(handle, pin, lgpio.BOTH_EDGES, on_edge))
 
     print(f"Monitoring {len(pins)} channel(s) on GPIO pins {pins}")
-    print(f"Debounce: {debounce_ms} ms   |   Press Ctrl+C to stop\n")
+    print(f"Rearm window: {rearm_ms} ms  |  Press Ctrl+C to stop\n")
     print(f"{'Channel':<10} {'GPIO Pin':<12} {'Trigger'}")
     print("-" * 40)
     for i, pin in enumerate(pins):
