@@ -2,7 +2,7 @@
 
 Uses the Pi 5 kernel PWM subsystem (/sys/class/pwm/) for a jitter-free
 50 Hz signal. Requires dtoverlay=pwm-2chan in /boot/firmware/config.txt,
-which maps GPIO 12 → pwm0 and GPIO 13 → pwm1 on pwmchip2.
+which maps GPIO 12 → pwm0 and GPIO 13 → pwm1 on pwmchip0.
 
 throttle is a float in [-1.0, 1.0]; positive = forward, negative = reverse.
 
