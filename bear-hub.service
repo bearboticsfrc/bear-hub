@@ -1,6 +1,7 @@
 [Unit]
 Description=BearHub FRC Hub Manager
-After=network.target
+After=network.target pwm-permissions.service
+Requires=pwm-permissions.service
 
 [Service]
 User=fms

@@ -1,0 +1,18 @@
+[Unit]
+Description=Set sysfs PWM permissions for bear-hub
+After=local-fs.target
+
+[Service]
+Type=oneshot
+# Pre-export both PWM channels so the pwm0/ and pwm1/ directories exist
+# before permissions are applied. bear-hub's Motors class re-exports on init,
+# which hits the OSError path caught with `pass` — that is intentional.
+ExecStart=/bin/sh -c '\
+  echo 0 > /sys/class/pwm/pwmchip0/export || true;\
+  echo 1 > /sys/class/pwm/pwmchip0/export || true;\
+  chown -R root:gpio /sys/class/pwm;\
+  chmod -R g+rw /sys/class/pwm'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
