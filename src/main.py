@@ -52,16 +52,20 @@ def main() -> None:
     # GPIO
     if use_hw and ENABLE_GPIO:
         from src.ball_counter import BallCounter
+        from src.motor_trigger import MotorTrigger
         from src.motors import Motors
 
         ball_counter = BallCounter()
         motors = Motors()
+        motor_trigger = MotorTrigger()
     else:
         from src.ball_counter import NullBallCounter
+        from src.motor_trigger import NullMotorTrigger
         from src.motors import NullMotors
 
         ball_counter = NullBallCounter()
         motors = NullMotors()
+        motor_trigger = NullMotorTrigger()
 
     modbus = ModbusServer()
     nt_client = NTClient()
@@ -74,6 +78,7 @@ def main() -> None:
         leds=leds,
         ball_counter=ball_counter,
         motors=motors,
+        motor_trigger=motor_trigger,
         modbus=modbus,
         nt_client=nt_client,
         sacn_receiver=sacn_receiver,

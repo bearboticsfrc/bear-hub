@@ -18,6 +18,8 @@ SPI_SPEED_HZ: int = 6_500_000
 # --- Motors (hardware PWM — Pi 5 supports PWM on GPIO 12, 13, 18, 19) ---
 MOTOR_PINS: list[int] = [12, 13]  # motor 0 → GPIO 12, motor 1 → GPIO 13
 MOTOR_SPEED: float = 1.0          # default throttle when running manually (0.0 – 1.0)
+MOTOR_TRIGGER_PIN: int = 17       # Banner QN18VN6LP white wire → GPIO 17 (pin 11)
+MOTOR_AUTO_RUN_SECONDS: int = 30  # how long to keep motors running after last trigger in demo mode
 # Sysfs hardware PWM — requires dtoverlay=pwm-2chan in /boot/firmware/config.txt.
 # Verify the chip number with: ls /sys/class/pwm/
 PWM_CHIP: int = 0                           # /sys/class/pwm/pwmchip0 on Pi 5
