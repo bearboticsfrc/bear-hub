@@ -19,6 +19,7 @@ SPI_SPEED_HZ: int = 6_500_000
 MOTOR_PINS: list[int] = [12, 13]  # motor 0 → GPIO 12, motor 1 → GPIO 13
 MOTOR_SPEED: float = 1.0          # default throttle when running manually (0.0 – 1.0)
 MOTOR_TRIGGER_PIN: int = 17       # Banner QN18VN6LP white wire → GPIO 17 (pin 11)
+RESET_BUTTON_PIN: int = 26        # physical reset button → GPIO 26 (pin 37)
 MOTOR_AUTO_RUN_SECONDS: int = 30  # how long to keep motors running after last trigger in demo mode
 # Sysfs hardware PWM — requires dtoverlay=pwm-2chan in /boot/firmware/config.txt.
 # Verify the chip number with: ls /sys/class/pwm/

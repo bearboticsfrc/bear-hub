@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from src.motor_trigger import MotorTriggerProtocol
     from src.motors import MotorsProtocol
     from src.nt_client import NTClient
+    from src.reset_button import ResetButtonProtocol
     from src.sacn_receiver import SACNReceiver
 
 log = logging.getLogger(__name__)
@@ -67,6 +68,7 @@ class App:
         modbus: ModbusServer,
         nt_client: NTClient,
         sacn_receiver: SACNReceiver,
+        reset_button: ResetButtonProtocol,
     ) -> None:
         self.hub = hub
         self._leds = leds
@@ -76,11 +78,13 @@ class App:
         self._modbus = modbus
         self._nt = nt_client
         self._sacn = sacn_receiver
+        self._reset_button = reset_button
 
         self.state = AppState()
         self._ball_queue: asyncio.Queue[int] = asyncio.Queue()
         self._led_queue: asyncio.Queue[Color] = asyncio.Queue()
         self._motor_trigger_queue: asyncio.Queue[None] = asyncio.Queue()
+        self._reset_button_queue: asyncio.Queue[None] = asyncio.Queue()
         self._shutdown_event = asyncio.Event()
         self._auto_grace_until: float = 0.0  # monotonic deadline for auto grace period
         self._hub_grace_until: float = 0.0   # monotonic deadline for hub-active grace period
@@ -119,6 +123,7 @@ class App:
         asyncio.create_task(self._practice_led_task())
         asyncio.create_task(self._motor_poll())
         asyncio.create_task(self._motor_trigger_task())
+        asyncio.create_task(self._reset_button_task())
 
         log.info("BearHub (%s) running — web at http://%s:%d", self.hub.name, WEB_HOST, WEB_PORT)
 
@@ -138,6 +143,7 @@ class App:
             self._motor_auto_stop_task.cancel()
         self._ball_counter.stop()
         self._motor_trigger.stop()
+        self._reset_button.stop()
         self._motors.stop_all()
         self._sacn.stop()
         self._nt.stop()
@@ -183,11 +189,13 @@ class App:
                 log.warning("NT unavailable (dev machine?) — robot connection disabled")
             self.state.nt_connected = False  # updated by poll
 
-        # Ball counter and motor trigger always active — stop first to release claimed pins
+        # Ball counter, motor trigger, and reset button always active — stop first to release claimed pins
         self._ball_counter.stop()
         self._ball_counter.start(loop, self._ball_queue)
         self._motor_trigger.stop()
         self._motor_trigger.start(loop, self._motor_trigger_queue)
+        self._reset_button.stop()
+        self._reset_button.start(loop, self._reset_button_queue)
 
     # ── Ball processing ──────────────────────────────────────────────────
 
@@ -536,6 +544,18 @@ class App:
             log.info("Motor trigger: auto-starting motors")
             await self._broadcast_state()
         self._motor_auto_stop_task = asyncio.create_task(self._motor_auto_stop_after())
+
+    # ── Reset button ─────────────────────────────────────────────────────
+
+    async def _reset_button_task(self) -> None:
+        """Consume reset button events and zero all ball counts."""
+        while not self._shutdown_event.is_set():
+            try:
+                await asyncio.wait_for(self._reset_button_queue.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
+            log.info("Reset button pressed — zeroing counts")
+            await self.reset_counts()
 
     async def _motor_auto_stop_after(self) -> None:
         try:

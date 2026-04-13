@@ -54,18 +54,22 @@ def main() -> None:
         from src.ball_counter import BallCounter
         from src.motor_trigger import MotorTrigger
         from src.motors import Motors
+        from src.reset_button import ResetButton
 
         ball_counter = BallCounter()
         motors = Motors()
         motor_trigger = MotorTrigger()
+        reset_button = ResetButton()
     else:
         from src.ball_counter import NullBallCounter
         from src.motor_trigger import NullMotorTrigger
         from src.motors import NullMotors
+        from src.reset_button import NullResetButton
 
         ball_counter = NullBallCounter()
         motors = NullMotors()
         motor_trigger = NullMotorTrigger()
+        reset_button = NullResetButton()
 
     modbus = ModbusServer()
     nt_client = NTClient()
@@ -82,6 +86,7 @@ def main() -> None:
         modbus=modbus,
         nt_client=nt_client,
         sacn_receiver=sacn_receiver,
+        reset_button=reset_button,
     )
 
     loop = asyncio.new_event_loop()
