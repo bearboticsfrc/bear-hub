@@ -46,7 +46,25 @@ dtparam=spi=on
 
 Reboot for the change to take effect.
 
-## 4. Add your user to the required groups
+## 4. Enable hardware PWM
+
+```bash
+sudo nano /boot/firmware/config.txt
+```
+
+Add inside the `[pi5]` section (create it if it doesn't exist):
+
+```
+[pi5]
+dtoverlay=pwm-2chan
+```
+
+> **Note:** Do not pass `pin=` or `func=` parameters — the overlay defaults are correct for Pi 5.
+> The PWM channels appear at `/sys/class/pwm/pwmchip0` after reboot.
+
+Reboot for the change to take effect.
+
+## 5. Add your user to the required groups
 
 ```bash
 sudo usermod -aG gpio,spi $USER
@@ -54,14 +72,14 @@ sudo usermod -aG gpio,spi $USER
 
 Log out and back in for group membership to take effect.
 
-## 5. Install uv
+## 6. Install uv
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source $HOME/.local/bin/env
 ```
 
-## 6. Copy the code to the Pi
+## 7. Copy the code to the Pi
 
 From your dev machine:
 
@@ -69,7 +87,7 @@ From your dev machine:
 rsync -av /path/to/bear-hub/ pi@redhub.local:~/bear-hub/
 ```
 
-## 7. Install dependencies
+## 8. Install dependencies
 
 ```bash
 sudo apt install -y swig liblgpio-dev   # swig: build robotpy-ntcore; liblgpio-dev: link lgpio Python package
@@ -80,14 +98,14 @@ uv pip install -e ".[pi]"           # installs lgpio and spidev
 python -m pip install pyntcore          # use python -m pip, NOT uv pip — uv cannot resolve robotpy packages
 ```
 
-## 8. Create the state directory
+## 9. Create the state directory
 
 ```bash
 sudo mkdir -p /var/lib/bear-hub
 sudo chown $USER:$USER /var/lib/bear-hub
 ```
 
-## 9. Run
+## 10. Run
 
 ```bash
 python -m src.main          # auto-detects hub from hostname (redhub → RedHub, bluehub → BlueHub)
@@ -100,17 +118,18 @@ Open the dashboard at `http://redhub.local:8080`.
 
 ## Run as a systemd service (start on boot)
 
-Copy the included service file:
+Copy both included service files:
 
 ```bash
+sudo cp ~/bear-hub/pwm-permissions.service /etc/systemd/system/pwm-permissions.service
 sudo cp ~/bear-hub/bear-hub.service /etc/systemd/system/bear-hub.service
 ```
 
 Enable and start:
 
 ```bash
-sudo systemctl enable bear-hub
-sudo systemctl start bear-hub
+sudo systemctl enable pwm-permissions bear-hub
+sudo systemctl start pwm-permissions bear-hub
 sudo systemctl status bear-hub
 ```
 

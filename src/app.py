@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 import uvicorn
 
 from src.config import (
+    MOTOR_AUTO_RUN_SECONDS,
     MOTOR_SPEED,
     NT_SERVER_ADDRESS,
     STATE_FILE,
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
     from src.ball_counter import BallCounterProtocol
     from src.leds import Color, LedStripProtocol
     from src.modbus import ModbusServer
+    from src.motor_trigger import MotorTriggerProtocol
     from src.motors import MotorsProtocol
     from src.nt_client import NTClient
     from src.sacn_receiver import SACNReceiver
@@ -61,6 +63,7 @@ class App:
         leds: LedStripProtocol,
         ball_counter: BallCounterProtocol,
         motors: MotorsProtocol,
+        motor_trigger: MotorTriggerProtocol,
         modbus: ModbusServer,
         nt_client: NTClient,
         sacn_receiver: SACNReceiver,
@@ -69,6 +72,7 @@ class App:
         self._leds = leds
         self._ball_counter = ball_counter
         self._motors = motors
+        self._motor_trigger = motor_trigger
         self._modbus = modbus
         self._nt = nt_client
         self._sacn = sacn_receiver
@@ -76,10 +80,12 @@ class App:
         self.state = AppState()
         self._ball_queue: asyncio.Queue[int] = asyncio.Queue()
         self._led_queue: asyncio.Queue[Color] = asyncio.Queue()
+        self._motor_trigger_queue: asyncio.Queue[None] = asyncio.Queue()
         self._shutdown_event = asyncio.Event()
         self._auto_grace_until: float = 0.0  # monotonic deadline for auto grace period
         self._hub_grace_until: float = 0.0   # monotonic deadline for hub-active grace period
         self._demo_flash_task: asyncio.Task | None = None
+        self._motor_auto_stop_task: asyncio.Task | None = None
 
         self._load_state()
 
@@ -112,6 +118,7 @@ class App:
         asyncio.create_task(self._status_poll())
         asyncio.create_task(self._practice_led_task())
         asyncio.create_task(self._motor_poll())
+        asyncio.create_task(self._motor_trigger_task())
 
         log.info("BearHub (%s) running — web at http://%s:%d", self.hub.name, WEB_HOST, WEB_PORT)
 
@@ -127,7 +134,10 @@ class App:
         self._shutdown_event.set()
 
     async def _do_shutdown(self) -> None:
+        if self._motor_auto_stop_task:
+            self._motor_auto_stop_task.cancel()
         self._ball_counter.stop()
+        self._motor_trigger.stop()
         self._motors.stop_all()
         self._sacn.stop()
         self._nt.stop()
@@ -173,9 +183,11 @@ class App:
                 log.warning("NT unavailable (dev machine?) — robot connection disabled")
             self.state.nt_connected = False  # updated by poll
 
-        # Ball counter always active — stop first to release any previously claimed pins
+        # Ball counter and motor trigger always active — stop first to release claimed pins
         self._ball_counter.stop()
         self._ball_counter.start(loop, self._ball_queue)
+        self._motor_trigger.stop()
+        self._motor_trigger.start(loop, self._motor_trigger_queue)
 
     # ── Ball processing ──────────────────────────────────────────────────
 
@@ -489,6 +501,9 @@ class App:
     async def toggle_motors(self) -> bool:
         """Toggle motors on/off manually. Returns the new state."""
         self.state.motors_running = not self.state.motors_running
+        if not self.state.motors_running and self._motor_auto_stop_task:
+            self._motor_auto_stop_task.cancel()
+            self._motor_auto_stop_task = None
         log.info("Motors %s", "started" if self.state.motors_running else "stopped")
         await self._broadcast_state()
         return self.state.motors_running
@@ -499,6 +514,38 @@ class App:
         log.info("Motor speed set to %.2f", self.state.motor_speed)
         self._save_state()
         await self._broadcast_state()
+
+    # ── Motor trigger (Banner sensor auto-run) ───────────────────────────
+
+    async def _motor_trigger_task(self) -> None:
+        """Consume trigger events from the Banner sensor and auto-run motors in demo mode."""
+        while not self._shutdown_event.is_set():
+            try:
+                await asyncio.wait_for(self._motor_trigger_queue.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
+            if self.state.mode == "demo":
+                await self._extend_motor_auto_run()
+
+    async def _extend_motor_auto_run(self) -> None:
+        """Start motors (if not running) and reset the 30-second auto-stop timer."""
+        if self._motor_auto_stop_task and not self._motor_auto_stop_task.done():
+            self._motor_auto_stop_task.cancel()
+        if not self.state.motors_running:
+            self.state.motors_running = True
+            log.info("Motor trigger: auto-starting motors")
+            await self._broadcast_state()
+        self._motor_auto_stop_task = asyncio.create_task(self._motor_auto_stop_after())
+
+    async def _motor_auto_stop_after(self) -> None:
+        try:
+            await asyncio.sleep(MOTOR_AUTO_RUN_SECONDS)
+            self.state.motors_running = False
+            self._motor_auto_stop_task = None
+            log.info("Motor trigger: auto-stop timer expired — motors stopped")
+            await self._broadcast_state()
+        except asyncio.CancelledError:
+            pass
 
     # ── State broadcast ──────────────────────────────────────────────────
 
